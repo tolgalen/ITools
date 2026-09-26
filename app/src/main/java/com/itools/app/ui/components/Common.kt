@@ -31,6 +31,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itools.app.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /* ---------- Language ---------- */
 
@@ -74,6 +77,24 @@ fun CopyButton(text: String, modifier: Modifier = Modifier) {
     IconButton(onClick = { copyText(ctx, text) }, enabled = text.isNotEmpty(), modifier = modifier) {
         Icon(Icons.Outlined.ContentCopy, contentDescription = stringResource(R.string.copy))
     }
+}
+
+/* ---------- Background work ---------- */
+
+/**
+ * Runs [compute] on a background thread [debounceMs] after the last change of [keys], keeping the previous
+ * result meanwhile, so typing never blocks the UI. The first value is computed immediately (small samples).
+ */
+@Composable
+fun <T> rememberComputed(vararg keys: Any?, debounceMs: Long = 250, compute: () -> T): T {
+    var value by remember { mutableStateOf(compute()) }
+    val skipFirst = remember { booleanArrayOf(true) }
+    LaunchedEffect(*keys) {
+        if (skipFirst[0]) { skipFirst[0] = false; return@LaunchedEffect }
+        delay(debounceMs)
+        value = withContext(Dispatchers.Default) { compute() }
+    }
+    return value
 }
 
 /* ---------- Layout ---------- */
@@ -172,8 +193,9 @@ fun KeyValue(label: String, value: String, copy: Boolean = true) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(128.dp)
         )
-        SelectionContainer(Modifier.weight(1f)) {
-            Text(value.ifEmpty { "—" }, style = MonoStyle)
+        // The weight goes on a Box: applied to SelectionContainer, long values pushed the copy button off screen
+        Box(Modifier.weight(1f)) {
+            SelectionContainer { Text(value.ifEmpty { "—" }, style = MonoStyle) }
         }
         if (copy) CopyButton(value, Modifier.size(36.dp))
     }

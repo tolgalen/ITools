@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 fun ToolContent(id: String) {
     when (id) {
         "token-generator" -> TokenGeneratorTool()
+        "password-generator" -> PasswordGeneratorTool()
         "hash-text" -> HashTextTool()
         "bcrypt" -> BcryptTool()
         "uuid-generator" -> UuidGeneratorTool()
@@ -37,6 +38,7 @@ fun ToolContent(id: String) {
         "toml-to-yaml" -> TomlToYamlTool()
         "xml-to-json" -> XmlToJsonTool()
         "json-to-xml" -> JsonToXmlTool()
+        "docker-converter" -> DockerConverterTool()
         "markdown-to-html" -> MarkdownToHtmlTool()
         "url-encoder" -> UrlEncoderTool()
         "html-entities" -> HtmlEntitiesTool()
@@ -73,6 +75,7 @@ fun ToolContent(id: String) {
         "regex-tester" -> RegexTesterTool()
         "regex-memo" -> RegexMemoTool()
         "ipv4-subnet-calculator" -> Ipv4SubnetTool()
+        "ipv6-subnet-calculator" -> Ipv6SubnetTool()
         "ipv4-address-converter" -> Ipv4ConverterTool()
         "ipv4-range-expander" -> Ipv4RangeTool()
         "mac-address-lookup" -> MacLookupTool()

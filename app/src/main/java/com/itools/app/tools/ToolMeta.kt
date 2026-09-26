@@ -32,6 +32,7 @@ data class ToolMeta(
 
 private val ToolIcons: Map<String, ImageVector> = mapOf(
     "token-generator" to Icons.Outlined.Shuffle,
+    "password-generator" to Icons.Outlined.Key,
     "hash-text" to Icons.Outlined.Tag,
     "bcrypt" to Icons.Outlined.EnhancedEncryption,
     "uuid-generator" to Icons.Outlined.Fingerprint,
@@ -53,6 +54,7 @@ private val ToolIcons: Map<String, ImageVector> = mapOf(
     "text-to-binary" to Icons.Outlined.Memory,
     "text-to-unicode" to Icons.Outlined.Translate,
     "list-converter" to Icons.Outlined.FormatListBulleted,
+    "docker-converter" to Icons.Outlined.SyncAlt,
     "markdown-to-html" to Icons.Outlined.Notes,
     "url-encoder" to Icons.Outlined.Link,
     "html-entities" to Icons.Outlined.Code,
@@ -83,6 +85,7 @@ private val ToolIcons: Map<String, ImageVector> = mapOf(
     "regex-tester" to Icons.Outlined.FindInPage,
     "regex-memo" to Icons.Outlined.Search,
     "ipv4-subnet-calculator" to Icons.Outlined.DeviceHub,
+    "ipv6-subnet-calculator" to Icons.Outlined.Hub,
     "ipv4-address-converter" to Icons.Outlined.SettingsEthernet,
     "ipv4-range-expander" to Icons.Outlined.DeviceHub,
     "mac-address-lookup" to Icons.Outlined.Search,

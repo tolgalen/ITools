@@ -1,6 +1,6 @@
 # ITools (Android)
 
-Native Android app (Kotlin + Jetpack Compose + Material 3) that brings the **86 utilities** of [it-tools.tech](https://it-tools.tech/) to your phone, grouped in the same categories: Crypto, Converter, Web, Images and videos, Development, Network, Math, Measurement, Text and Data.
+Native Android app (Kotlin + Jetpack Compose + Material 3) that brings the 86 utilities of [it-tools.tech](https://it-tools.tech/) to your phone, plus a password generator, an IPv6 subnet calculator and a two-way docker run ⇄ Compose converter (**89 tools**), grouped in the same categories: Crypto, Converter, Web, Images and videos, Development, Network, Math, Measurement, Text and Data.
 
 - **Android 10+** (minSdk 29, targetSdk 35)
 - **Themes**: system default, light, dark, dark blue, black (OLED) and it-tools green; optional dynamic color (Material You) on Android 12+

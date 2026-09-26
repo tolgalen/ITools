@@ -12,6 +12,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.itools.app.ui.components.*
 import com.itools.app.util.*
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /* ======================= Git cheatsheet ======================= */
 
@@ -219,7 +223,7 @@ fun JsonPrettifyTool() {
     var input by remember { mutableStateOf("{\"hello\": [\"world\"], \"foo\": {\"b\": 2, \"a\": 1}}") }
     var sort by remember { mutableStateOf(true) }
     var indent by remember { mutableIntStateOf(3) }
-    val r = remember(input, sort, indent) { if (input.isBlank()) Result.success("") else runCatching { Json.stringify(Json.parse(input), indent, sort) } }
+    val r = rememberComputed(input, sort, indent) { if (input.isBlank()) Result.success("") else runCatching { Json.stringify(Json.parse(input), indent, sort) } }
     ToolColumn {
         Panel {
             SwitchRow(t("Sort keys", "Ordenar claves"), sort) { sort = it }
@@ -379,7 +383,7 @@ fun SqlPrettifyTool() {
     var input by remember { mutableStateOf("select field1,field2,field3 from my_table where my_condition = 1 and another_condition = 'foo' order by field1 desc;") }
     var kwCase by remember { mutableStateOf(SqlFormatter.KwCase.UPPER) }
     var indent by remember { mutableIntStateOf(2) }
-    val out = remember(input, kwCase, indent) { runCatching { SqlFormatter.format(input, indent, kwCase) }.getOrElse { it.message ?: "" } }
+    val out = rememberComputed(input, kwCase, indent) { runCatching { SqlFormatter.format(input, indent, kwCase) }.getOrElse { it.message ?: "" } }
     ToolColumn {
         Panel {
             ChipChoice(t("Keyword case", "Mayúsculas en palabras clave"), listOf(
@@ -425,142 +429,6 @@ fun ChmodTool() {
 
 /* ======================= Docker run → compose ======================= */
 
-object DockerCompose {
-    /** Splits a shell line honoring quotes and "\" line continuations. */
-    fun shellSplit(s: String): List<String> {
-        val src = s.replace(Regex("\\\\\\r?\\n"), " ")
-        val out = mutableListOf<String>(); val cur = StringBuilder(); var q: Char? = null; var has = false; var i = 0
-        while (i < src.length) {
-            val c = src[i]
-            when {
-                q != null -> if (c == q) q = null else if (c == '\\' && q == '"' && i + 1 < src.length) { cur.append(src[++i]) } else cur.append(c)
-                c == '\'' || c == '"' -> { q = c; has = true }
-                c == '\\' && i + 1 < src.length -> { cur.append(src[++i]); has = true }
-                c.isWhitespace() -> { if (cur.isNotEmpty() || has) out += cur.toString(); cur.clear(); has = false }
-                else -> cur.append(c)
-            }
-            i++
-        }
-        if (cur.isNotEmpty() || has) out += cur.toString()
-        return out
-    }
-
-    private val NO_VALUE = setOf("-d", "--detach", "--rm", "-i", "--interactive", "-t", "--tty", "-it", "-ti", "--privileged", "--init", "--read-only", "-P", "--publish-all")
-
-    private val YAML_RESERVED = setOf("true", "false", "yes", "no", "on", "off", "null", "~")
-
-    data class Result(val yaml: String, val warnings: List<String>)
-
-    fun convert(cmd: String): Result {
-        var args = shellSplit(cmd.trim())
-        if (args.firstOrNull() == "sudo") args = args.drop(1)
-        if (args.firstOrNull() == "docker") args = args.drop(1)
-        if (args.firstOrNull() == "container") args = args.drop(1)
-        if (args.firstOrNull() == "run") args = args.drop(1) else throw IllegalArgumentException("Command must start with 'docker run'")
-        val svc = LinkedHashMap<String, Any>()
-        val lists = LinkedHashMap<String, MutableList<String>>()
-        val maps = LinkedHashMap<String, LinkedHashMap<String, String>>()
-        val warnings = mutableListOf<String>()
-        fun addL(k: String, v: String) { lists.getOrPut(k) { mutableListOf() } += v }
-        var i = 0; var image: String? = null
-        while (i < args.size) {
-            val a = args[i]
-            if (!a.startsWith("-")) { image = a; i++; break }
-            var (flag, inline) = if (a.startsWith("--") && a.contains("=")) a.substringBefore("=") to a.substringAfter("=") else a to null
-            // short flags combined with their value: -p8080:80
-            if (!a.startsWith("--") && a.length > 2 && a !in NO_VALUE && inline == null && a[1] in "pvewuhlm") { flag = a.substring(0, 2); inline = a.substring(2) }
-            if (flag in NO_VALUE) {
-                when (flag) {
-                    "-it", "-ti" -> { svc["stdin_open"] = true; svc["tty"] = true }
-                    "-i", "--interactive" -> svc["stdin_open"] = true
-                    "-t", "--tty" -> svc["tty"] = true
-                    "--privileged" -> svc["privileged"] = true
-                    "--init" -> svc["init"] = true
-                    "--read-only" -> svc["read_only"] = true
-                    "--rm" -> warnings += "--rm"
-                }
-                i++; continue
-            }
-            val v = inline ?: args.getOrNull(i + 1) ?: throw IllegalArgumentException("Missing value for $flag")
-            i += if (inline != null) 1 else 2
-            when (flag) {
-                "--name" -> svc["container_name"] = v
-                "-p", "--publish" -> addL("ports", v)
-                "-v", "--volume", "--mount" -> addL("volumes", v)
-                "-e", "--env" -> addL("environment", v)
-                "--env-file" -> addL("env_file", v)
-                "--network", "--net" -> addL("networks", v)
-                "--restart" -> svc["restart"] = v
-                "-w", "--workdir" -> svc["working_dir"] = v
-                "-u", "--user" -> svc["user"] = v
-                "-h", "--hostname" -> svc["hostname"] = v
-                "--entrypoint" -> svc["entrypoint"] = v
-                "--cap-add" -> addL("cap_add", v)
-                "--cap-drop" -> addL("cap_drop", v)
-                "--device" -> addL("devices", v)
-                "-l", "--label" -> addL("labels", v)
-                "--dns" -> addL("dns", v)
-                "--dns-search" -> addL("dns_search", v)
-                "--add-host" -> addL("extra_hosts", v)
-                "--expose" -> addL("expose", v)
-                "--link" -> addL("links", v)
-                "--tmpfs" -> addL("tmpfs", v)
-                "--security-opt" -> addL("security_opt", v)
-                "--sysctl" -> v.split("=", limit = 2).let { maps.getOrPut("sysctls") { LinkedHashMap() }[it[0]] = it.getOrElse(1) { "" } }
-                "--log-driver" -> maps.getOrPut("logging") { LinkedHashMap() }["driver"] = v
-                "--log-opt" -> addL("logging.options", v)
-                "-m", "--memory" -> svc["mem_limit"] = v
-                "--memory-reservation" -> svc["mem_reservation"] = v
-                "--cpus" -> svc["cpus"] = v
-                "--cpu-shares", "-c" -> svc["cpu_shares"] = v
-                "--shm-size" -> svc["shm_size"] = v
-                "--pid" -> svc["pid"] = v
-                "--ipc" -> svc["ipc"] = v
-                "--platform" -> svc["platform"] = v
-                "--stop-signal" -> svc["stop_signal"] = v
-                "--mac-address" -> svc["mac_address"] = v
-                "--ulimit" -> v.split("=", limit = 2).let { maps.getOrPut("ulimits") { LinkedHashMap() }[it[0]] = it.getOrElse(1) { "" } }
-                "--health-cmd" -> maps.getOrPut("healthcheck") { LinkedHashMap() }["test"] = v
-                "--health-interval" -> maps.getOrPut("healthcheck") { LinkedHashMap() }["interval"] = v
-                "--health-timeout" -> maps.getOrPut("healthcheck") { LinkedHashMap() }["timeout"] = v
-                "--health-retries" -> maps.getOrPut("healthcheck") { LinkedHashMap() }["retries"] = v
-                "--gpus" -> warnings += "--gpus $v"
-                else -> warnings += "$flag $v"
-            }
-        }
-        image ?: throw IllegalArgumentException("No image specified")
-        val command = args.drop(i)
-        val name = (svc["container_name"] as? String) ?: image.substringAfterLast('/').substringBefore(':').substringBefore('@')
-            .replace(Regex("[^a-zA-Z0-9_-]"), "-").ifEmpty { "app" }
-
-        fun q(s: String): String = if (s.isEmpty() || s.any { it in ":{}[],&*#?|<>=!%@`'\"\\" } || s.first().isWhitespace() || s.last().isWhitespace() ||
-            s.lowercase() in YAML_RESERVED || s.toDoubleOrNull() != null) Json.quote(s) else s
-
-        val sb = StringBuilder("services:\n  ${q(name)}:\n    image: ${q(image)}\n")
-        svc.forEach { (k, v) -> sb.append("    $k: ${if (v is Boolean) v.toString() else q(v.toString())}\n") }
-        val logOpts = lists.remove("logging.options")
-        lists.forEach { (k, l) ->
-            sb.append("    $k:\n"); l.forEach { sb.append("      - ${q(it)}\n") }
-        }
-        maps.forEach { (k, m) ->
-            sb.append("    $k:\n"); m.forEach { (mk, mv) -> sb.append("      $mk: ${q(mv)}\n") }
-            if (k == "logging" && logOpts != null) {
-                sb.append("      options:\n"); logOpts.forEach { o -> o.split("=", limit = 2).let { sb.append("        ${it[0]}: ${q(it.getOrElse(1) { "" })}\n") } }
-            }
-        }
-        if (logOpts != null && "logging" !in maps) {
-            sb.append("    logging:\n      options:\n"); logOpts.forEach { o -> o.split("=", limit = 2).let { sb.append("        ${it[0]}: ${q(it.getOrElse(1) { "" })}\n") } }
-        }
-        if (command.isNotEmpty()) sb.append("    command: ${command.joinToString(" ") { q(it) }.let { if (command.size > 1) Json.stringify(command, 0) else it }}\n")
-        (lists["networks"])?.filter { it !in setOf("host", "bridge", "none") && !it.startsWith("container:") }?.takeIf { it.isNotEmpty() }?.let { nets ->
-            sb.append("networks:\n"); nets.forEach { sb.append("  ${q(it)}:\n    external: true\n") }
-        }
-        val namedVolumes = lists["volumes"]?.map { it.substringBefore(':') }?.filter { !it.startsWith("/") && !it.startsWith(".") && !it.startsWith("~") && !it.startsWith("$") && !it.contains("=") }
-        namedVolumes?.takeIf { it.isNotEmpty() }?.let { vols -> sb.append("volumes:\n"); vols.distinct().forEach { sb.append("  ${q(it)}:\n") } }
-        return Result(sb.toString().trimEnd(), warnings)
-    }
-}
-
 @Composable
 fun DockerRunToComposeTool() {
     var input by remember { mutableStateOf("docker run -p 80:80 -v /var/run/docker.sock:/tmp/docker.sock:ro --restart always --log-opt max-size=1g nginx") }
@@ -590,7 +458,7 @@ fun XmlFormatterTool() {
     var input by remember { mutableStateOf("<hello><world>foo</world><world>bar</world></hello>") }
     var collapse by remember { mutableStateOf(true) }
     var indent by remember { mutableIntStateOf(2) }
-    val r = remember(input, collapse, indent) { if (input.isBlank()) Result.success("") else runCatching { XmlFmt.format(input, indent, collapse) } }
+    val r = rememberComputed(input, collapse, indent) { if (input.isBlank()) Result.success("") else runCatching { XmlFmt.format(input, indent, collapse) } }
     ToolColumn {
         Panel {
             SwitchRow(t("Collapse content", "Contraer contenido"), collapse) { collapse = it }
@@ -607,7 +475,7 @@ fun YamlPrettifyTool() {
     var input by remember { mutableStateOf("\"users\":\n  - \"name\": \"John\"\n    \"age\": 30\n  - \"name\": \"Jane\"\n    \"age\": 25\n") }
     var sort by remember { mutableStateOf(false) }
     var indent by remember { mutableIntStateOf(2) }
-    val r = remember(input, sort, indent) { if (input.isBlank()) Result.success("") else runCatching { Yaml.stringify(Yaml.parse(input), indent, sort) } }
+    val r = rememberComputed(input, sort, indent) { if (input.isBlank()) Result.success("") else runCatching { Yaml.stringify(Yaml.parse(input), indent, sort) } }
     ToolColumn {
         Panel {
             SwitchRow(t("Sort keys", "Ordenar claves"), sort) { sort = it }
@@ -655,6 +523,11 @@ fun EmailNormalizerTool() {
 
 /* ======================= Regex tester ======================= */
 
+/** Dedicated low-priority daemon threads: a runaway expression never starves the shared background pool. */
+private val RegexThreads = java.util.concurrent.Executors.newCachedThreadPool { r ->
+    Thread(r, "regex-tester").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
+}.asCoroutineDispatcher()
+
 @Composable
 fun RegexTesterTool() {
     var pattern by remember { mutableStateOf("(?<word>\\w+)@(\\w+)\\.com") }
@@ -673,8 +546,19 @@ fun RegexTesterTool() {
             Regex(pattern, opts)
         }
     }
-    val matches = remember(regex, sample, global) {
-        regex.getOrNull()?.let { r -> if (global) r.findAll(sample).take(1000).toList() else listOfNotNull(r.find(sample)) } ?: emptyList()
+    // Android's regex engine (ICU) cannot be interrupted, so matching runs on its own threads: the UI never
+    // freezes, a slow expression only shows a notice, and stale results are discarded when the input changes.
+    // The matches are stored with the text they were computed on: the input may have changed meanwhile
+    var result by remember { mutableStateOf("" to emptyList<MatchResult>()) }
+    var slow by remember { mutableStateOf(false) }
+    LaunchedEffect(regex, sample, global) {
+        delay(200)
+        val notice = launch { delay(1000); slow = true }
+        val text = sample
+        result = text to withContext(RegexThreads) {
+            regex.getOrNull()?.let { r -> if (global) r.findAll(text).take(1000).toList() else listOfNotNull(r.find(text)) } ?: emptyList()
+        }
+        notice.cancel(); slow = false
     }
     val groupNames = remember(pattern) { Regex("\\(\\?<([a-zA-Z][a-zA-Z0-9]*)>").findAll(pattern).map { it.groupValues[1] }.toList() }
     val hl = MaterialTheme.colorScheme.primaryContainer
@@ -688,16 +572,22 @@ fun RegexTesterTool() {
             SwitchRow(t("Singleline / dotAll (s)", "Punto incluye salto de línea (s)"), dotAll) { dotAll = it }
         }
         InputField(sample, { sample = it }, t("Text to match", "Texto de prueba"), singleLine = false, minLines = 4, mono = true)
+        if (slow) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            Hint(t("Still matching… this expression may be too slow (catastrophic backtracking).",
+                "Buscando… esta expresión puede ser demasiado lenta (backtracking catastrófico)."))
+        }
+        val (matchedText, matches) = result
         Panel(t("Highlighted matches", "Coincidencias resaltadas")) {
             Text(buildAnnotatedString {
                 var last = 0
                 matches.filter { it.range.last >= it.range.first }.forEach { m ->
                     if (m.range.first < last) return@forEach
-                    append(sample.substring(last, m.range.first))
+                    append(matchedText.substring(last, m.range.first))
                     withStyle(SpanStyle(background = hl, fontWeight = FontWeight.Bold)) { append(m.value) }
                     last = m.range.last + 1
                 }
-                append(sample.substring(last.coerceAtMost(sample.length)))
+                append(matchedText.substring(last.coerceAtMost(matchedText.length)))
             }, style = MonoStyle)
         }
         Text(t("Matches: ", "Coincidencias: ") + matches.size, style = MaterialTheme.typography.titleSmall)

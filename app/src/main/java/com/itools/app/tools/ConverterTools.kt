@@ -45,7 +45,7 @@ fun FormatConverter(
     convert: (String) -> String,
 ) {
     var input by remember { mutableStateOf(sample) }
-    val result = remember(input) { if (input.isBlank()) Result.success("") else runCatching { convert(input) } }
+    val result = rememberComputed(input) { if (input.isBlank()) Result.success("") else runCatching { convert(input) } }
     ToolColumn {
         InputField(input, { input = it }, inLabel, singleLine = false, minLines = 8, mono = true,
             error = result.exceptionOrNull()?.let { (it.message ?: it.javaClass.simpleName).take(300) })

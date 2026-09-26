@@ -603,8 +603,10 @@ fun JsonDiffTool() {
     var a by remember { mutableStateOf("{\"a\": 1, \"b\": [1, 2], \"c\": {\"d\": \"x\"}}") }
     var b by remember { mutableStateOf("{\"a\": 2, \"b\": [1, 2, 3], \"c\": {\"e\": \"y\"}}") }
     var onlyDiff by remember { mutableStateOf(true) }
-    val pa = remember(a) { runCatching { Json.parse(a) } }
-    val pb = remember(b) { runCatching { Json.parse(b) } }
+    val (pa, pb, diff) = rememberComputed(a, b) {
+        val pa = runCatching { Json.parse(a) }; val pb = runCatching { Json.parse(b) }
+        Triple(pa, pb, if (pa.isSuccess && pb.isSuccess) JsonDiff.diff(pa.getOrNull(), pb.getOrNull()) else emptyList())
+    }
     val green = androidx.compose.ui.graphics.Color(0xFF18A058)
     val red = MaterialTheme.colorScheme.error
     val amber = androidx.compose.ui.graphics.Color(0xFFF0A020)
@@ -613,8 +615,7 @@ fun JsonDiffTool() {
         InputField(b, { b = it }, t("Your JSON to compare", "JSON a comparar"), singleLine = false, minLines = 5, mono = true, error = pb.exceptionOrNull()?.message)
         SwitchRow(t("Only show differences", "Mostrar solo diferencias"), onlyDiff) { onlyDiff = it }
         if (pa.isSuccess && pb.isSuccess) {
-            val d = remember(a, b) { JsonDiff.diff(pa.getOrNull(), pb.getOrNull()) }
-            val shown = if (onlyDiff) d.filter { it !is JsonDiff.D.Same } else d
+            val shown = if (onlyDiff) diff.filter { it !is JsonDiff.D.Same } else diff
             if (shown.isEmpty()) Text(t("The provided JSONs are the same", "Los JSON son idénticos"), color = green)
             Panel {
                 shown.forEach { x ->

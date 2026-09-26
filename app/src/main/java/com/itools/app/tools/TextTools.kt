@@ -313,7 +313,7 @@ fun TextDiffTool() {
     var b by remember { mutableStateOf("Hello world!\nThis is the modified text\nSame line\nNew line") }
     var byWord by remember { mutableStateOf(false) }
     val del = Color(0x55E53935); val add = Color(0x5543A047)
-    val d = remember(a, b, byWord) { if (byWord) Diff.diff(Diff.tokens(a), Diff.tokens(b)) else Diff.diff(a.lines(), b.lines()) }
+    val d = rememberComputed(a, b, byWord) { if (byWord) Diff.diff(Diff.tokens(a), Diff.tokens(b)) else Diff.diff(a.lines(), b.lines()) }
     ToolColumn {
         InputField(a, { a = it }, t("Original text", "Texto original"), singleLine = false, minLines = 4, mono = true)
         InputField(b, { b = it }, t("Modified text", "Texto modificado"), singleLine = false, minLines = 4, mono = true)

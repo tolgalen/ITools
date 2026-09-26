@@ -6,6 +6,7 @@ import com.itools.app.R
 object ToolCatalog {
     val entries: List<ToolMeta> = listOf(
         ToolMeta("token-generator", Category.CRYPTO, R.string.tool_token_generator, R.string.tool_token_generator_desc, "Token generator"),
+        ToolMeta("password-generator", Category.CRYPTO, R.string.tool_password_generator, R.string.tool_password_generator_desc, "Password generator"),
         ToolMeta("hash-text", Category.CRYPTO, R.string.tool_hash_text, R.string.tool_hash_text_desc, "Hash text"),
         ToolMeta("bcrypt", Category.CRYPTO, R.string.tool_bcrypt, R.string.tool_bcrypt_desc, "Bcrypt"),
         ToolMeta("uuid-generator", Category.CRYPTO, R.string.tool_uuid_generator, R.string.tool_uuid_generator_desc, "UUIDs generator"),
@@ -35,6 +36,7 @@ object ToolCatalog {
         ToolMeta("toml-to-yaml", Category.CONVERTER, R.string.tool_toml_to_yaml, R.string.tool_toml_to_yaml_desc, "TOML to YAML"),
         ToolMeta("xml-to-json", Category.CONVERTER, R.string.tool_xml_to_json, R.string.tool_xml_to_json_desc, "XML to JSON"),
         ToolMeta("json-to-xml", Category.CONVERTER, R.string.tool_json_to_xml, R.string.tool_json_to_xml_desc, "JSON to XML"),
+        ToolMeta("docker-converter", Category.CONVERTER, R.string.tool_docker_converter, R.string.tool_docker_converter_desc, "Docker run ⇄ Compose converter"),
         ToolMeta("markdown-to-html", Category.CONVERTER, R.string.tool_markdown_to_html, R.string.tool_markdown_to_html_desc, "Markdown to HTML"),
         ToolMeta("url-encoder", Category.WEB, R.string.tool_url_encoder, R.string.tool_url_encoder_desc, "Encode/decode url formatted strings"),
         ToolMeta("html-entities", Category.WEB, R.string.tool_html_entities, R.string.tool_html_entities_desc, "Escape html entities"),
@@ -71,6 +73,7 @@ object ToolCatalog {
         ToolMeta("regex-tester", Category.DEVELOPMENT, R.string.tool_regex_tester, R.string.tool_regex_tester_desc, "Regex Tester"),
         ToolMeta("regex-memo", Category.DEVELOPMENT, R.string.tool_regex_memo, R.string.tool_regex_memo_desc, "Regex cheatsheet"),
         ToolMeta("ipv4-subnet-calculator", Category.NETWORK, R.string.tool_ipv4_subnet_calculator, R.string.tool_ipv4_subnet_calculator_desc, "IPv4 subnet calculator"),
+        ToolMeta("ipv6-subnet-calculator", Category.NETWORK, R.string.tool_ipv6_subnet_calculator, R.string.tool_ipv6_subnet_calculator_desc, "IPv6 subnet calculator"),
         ToolMeta("ipv4-address-converter", Category.NETWORK, R.string.tool_ipv4_address_converter, R.string.tool_ipv4_address_converter_desc, "IPv4 address converter"),
         ToolMeta("ipv4-range-expander", Category.NETWORK, R.string.tool_ipv4_range_expander, R.string.tool_ipv4_range_expander_desc, "IPv4 range expander"),
         ToolMeta("mac-address-lookup", Category.NETWORK, R.string.tool_mac_address_lookup, R.string.tool_mac_address_lookup_desc, "MAC address lookup"),

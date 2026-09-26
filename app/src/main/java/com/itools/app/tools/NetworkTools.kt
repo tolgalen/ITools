@@ -3,6 +3,7 @@ package com.itools.app.tools
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.itools.app.ui.components.*
@@ -10,6 +11,7 @@ import com.itools.app.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.math.BigInteger
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -167,6 +169,176 @@ fun Ipv4RangeTool() {
                 }
                 OutputField("${Ipv4.str(ns)}/$bits", "CIDR", singleLine = true)
             }
+        }
+    }
+}
+
+/* ======================= IPv6 utilities ======================= */
+
+object Ipv6 {
+    private val ALL_ONES: BigInteger = BigInteger.ONE.shiftLeft(128) - BigInteger.ONE
+    private fun isHex(c: Char) = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
+
+    /** Parses a textual IPv6 address ("::" compression and a trailing embedded IPv4 are supported). */
+    fun parse(input: String): BigInteger? {
+        var t = input.trim().removePrefix("[").removeSuffix("]")
+        if (t.count { it == ':' } < 2) return null
+        val lastColon = t.lastIndexOf(':')
+        val tail = t.substring(lastColon + 1)
+        if ('.' in tail) {
+            val v4 = Ipv4.parse(tail) ?: return null
+            t = t.substring(0, lastColon + 1) + "%x:%x".format(v4 shr 16, v4 and 0xffff)
+        }
+        val dbl = t.indexOf("::")
+        if (dbl >= 0 && t.indexOf("::", dbl + 1) >= 0) return null
+        fun groups(part: String) = if (part.isEmpty()) emptyList() else part.split(':')
+        val head = groups(if (dbl >= 0) t.substring(0, dbl) else t)
+        val rest = if (dbl >= 0) groups(t.substring(dbl + 2)) else emptyList()
+        val n = head.size + rest.size
+        if ((dbl < 0 && n != 8) || (dbl >= 0 && n > 7)) return null
+        var v = BigInteger.ZERO
+        for (g in head + List(8 - n) { "0" } + rest) {
+            if (g.isEmpty() || g.length > 4 || !g.all(::isHex)) return null
+            v = v.shiftLeft(16).or(BigInteger.valueOf(g.toLong(16)))
+        }
+        return v
+    }
+
+    private fun groups(v: BigInteger) = (7 downTo 0).map { v.shiftRight(it * 16).toInt() and 0xffff }
+
+    /** Full form: 8 groups of 4 hex digits. */
+    fun expanded(v: BigInteger) = groups(v).joinToString(":") { "%04x".format(it) }
+
+    /** Canonical compressed form (RFC 5952): the longest run of two or more zero groups becomes "::". */
+    fun compressed(v: BigInteger): String {
+        val g = groups(v)
+        var bestStart = -1; var bestLen = 0; var i = 0
+        while (i < 8) {
+            if (g[i] == 0) {
+                var j = i; while (j < 8 && g[j] == 0) j++
+                if (j - i > bestLen) { bestStart = i; bestLen = j - i }
+                i = j
+            } else i++
+        }
+        if (bestLen < 2) return g.joinToString(":") { it.toString(16) }
+        val left = g.subList(0, bestStart).joinToString(":") { it.toString(16) }
+        val right = g.subList(bestStart + bestLen, 8).joinToString(":") { it.toString(16) }
+        return "$left::$right"
+    }
+
+    fun mask(bits: Int): BigInteger = ALL_ONES.shiftLeft(128 - bits).and(ALL_ONES)
+
+
+    enum class Kind(val en: String, val es: String) {
+        UNSPECIFIED("Unspecified", "No especificada"), LOOPBACK("Loopback", "Loopback"),
+        IPV4_MAPPED("IPv4-mapped", "IPv4 mapeada"), NAT64("NAT64 (IPv4/IPv6 translation)", "NAT64 (traducción IPv4/IPv6)"),
+        DOCUMENTATION("Documentation", "Documentación"), TEREDO("Teredo", "Teredo"), SIX_TO_FOUR("6to4", "6to4"),
+        UNIQUE_LOCAL("Unique local (ULA)", "Local única (ULA)"), LINK_LOCAL("Link-local", "Enlace local"),
+        MULTICAST("Multicast", "Multidifusión"), GLOBAL("Global unicast", "Unidifusión global"), RESERVED("Reserved", "Reservada"),
+    }
+
+    /** Special-purpose ranges, most specific first. */
+    private val RANGES: List<Triple<Kind, BigInteger, Int>> by lazy {
+        listOf(
+            Triple(Kind.UNSPECIFIED, "::", 128), Triple(Kind.LOOPBACK, "::1", 128),
+            Triple(Kind.IPV4_MAPPED, "::ffff:0:0", 96), Triple(Kind.NAT64, "64:ff9b::", 96),
+            Triple(Kind.DOCUMENTATION, "2001:db8::", 32), Triple(Kind.TEREDO, "2001::", 32),
+            Triple(Kind.SIX_TO_FOUR, "2002::", 16), Triple(Kind.UNIQUE_LOCAL, "fc00::", 7),
+            Triple(Kind.LINK_LOCAL, "fe80::", 10), Triple(Kind.MULTICAST, "ff00::", 8),
+            Triple(Kind.GLOBAL, "2000::", 3),
+        ).map { (k, p, bits) -> Triple(k, parse(p)!!, bits) }
+    }
+
+    fun kind(v: BigInteger): Kind =
+        RANGES.firstOrNull { (_, net, bits) -> v.and(mask(bits)) == net }?.first ?: Kind.RESERVED
+
+    data class Subnet(val ip: BigInteger, val bits: Int) {
+        val network: BigInteger get() = ip.and(mask(bits))
+        val last: BigInteger get() = network.or(mask(bits).xor(ALL_ONES))
+        val size: BigInteger get() = BigInteger.ONE.shiftLeft(128 - bits)
+        /** Reverse DNS zone of the network (nibble boundary rounded up). */
+        val reverseZone: String get() {
+            val nibbles = expanded(network).replace(":", "").take((bits + 3) / 4)
+            return nibbles.reversed().toList().joinToString(".") + (if (nibbles.isEmpty()) "" else ".") + "ip6.arpa"
+        }
+    }
+
+    /** Accepts "address/prefix" or just "address" (then /64 is assumed). */
+    fun parseSubnet(s: String): Subnet? {
+        val t = s.trim()
+        val ip = parse(t.substringBefore('/')) ?: return null
+        if ('/' !in t) return Subnet(ip, 64)
+        val bits = t.substringAfter('/').trim().toIntOrNull()?.takeIf { it in 0..128 } ?: return null
+        return Subnet(ip, bits)
+    }
+
+    fun isMax(v: BigInteger) = v == ALL_ONES
+
+    /** "2^n = value" for sizes too large to read comfortably. */
+    fun power(exp: Int): String = BigInteger.ONE.shiftLeft(exp).let { if (exp > 16) "2^$exp = $it" else it.toString() }
+}
+
+/* ======================= IPv6 subnet calculator ======================= */
+
+@Composable
+fun Ipv6SubnetTool() {
+    var input by remember { mutableStateOf("2001:db8:85a3::8a2e:370:7334/64") }
+    val sub = remember(input) { Ipv6.parseSubnet(input) }
+    val es = isSpanish()
+    ToolColumn {
+        InputField(input, { input = it }, t("An IPv6 address with or without prefix", "Dirección IPv6 con o sin prefijo"), mono = true,
+            placeholder = "2001:db8::1/64",
+            error = if (sub == null) t("We cannot parse this address, check the format", "No se puede interpretar la dirección, revisa el formato") else null)
+        Hint(t("Without a prefix length, /64 is assumed.", "Sin longitud de prefijo se asume /64."))
+        sub?.let { s ->
+            val kind = Ipv6.kind(s.ip)
+            KeyValueTable(buildList {
+                add(t("Address", "Dirección") to Ipv6.compressed(s.ip))
+                add(t("Expanded address", "Dirección expandida") to Ipv6.expanded(s.ip))
+                add(t("Network", "Red") to "${Ipv6.compressed(s.network)}/${s.bits}")
+                add(t("Prefix length", "Longitud del prefijo") to "/${s.bits}")
+                add(t("Network mask", "Máscara de red") to Ipv6.compressed(Ipv6.mask(s.bits)))
+                add(t("First address", "Primera dirección") to Ipv6.compressed(s.network))
+                add(t("Last address", "Última dirección") to Ipv6.compressed(s.last))
+                add(t("Total addresses", "Total de direcciones") to Ipv6.power(128 - s.bits))
+                if (s.bits <= 64) add(t("/64 networks", "Redes /64") to Ipv6.power(64 - s.bits))
+                add(t("Address type", "Tipo de dirección") to if (es) kind.es else kind.en)
+                add(t("Reverse DNS zone", "Zona DNS inversa") to s.reverseZone)
+            })
+            ButtonRow {
+                OutlinedButton(onClick = { input = "${Ipv6.compressed(s.network - s.size)}/${s.bits}" }, enabled = s.network.signum() > 0) {
+                    Text(t("Previous block", "Bloque anterior"))
+                }
+                OutlinedButton(onClick = { input = "${Ipv6.compressed(s.last + BigInteger.ONE)}/${s.bits}" }, enabled = !Ipv6.isMax(s.last)) {
+                    Text(t("Next block", "Bloque siguiente"))
+                }
+            }
+            if (s.bits < 128) SubnetSplit(s)
+        }
+    }
+}
+
+/** Splits the network into smaller subnets and lists the first ones. */
+@Composable
+private fun SubnetSplit(s: Ipv6.Subnet) {
+    val maxPrefix = minOf(128, s.bits + 16)
+    var newPrefix by remember(s.bits) { mutableIntStateOf(minOf(maxOf(s.bits + 1, 64), maxPrefix)) }
+    val shown = 16
+    val subnets = remember(s.network, s.bits, newPrefix) {
+        val step = BigInteger.ONE.shiftLeft(128 - newPrefix)
+        val count = 1 shl (newPrefix - s.bits)
+        List(minOf(count, shown)) { i -> "${Ipv6.compressed(s.network + step * BigInteger.valueOf(i.toLong()))}/$newPrefix" }
+    }
+    Panel(t("Split into subnets", "Dividir en subredes")) {
+        // A slider needs at least two values (a /127 can only be split into /128)
+        if (maxPrefix > s.bits + 1) SliderRow(t("New prefix length", "Nueva longitud de prefijo"), newPrefix, (s.bits + 1)..maxPrefix) { newPrefix = it }
+        else Text(t("New prefix length", "Nueva longitud de prefijo") + ": $newPrefix", style = MaterialTheme.typography.labelLarge)
+        Hint(t("Subnets", "Subredes") + ": " + Ipv6.power(newPrefix - s.bits) +
+            if (newPrefix - s.bits > 4) " · " + t("showing the first $shown", "se muestran las $shown primeras") else "")
+        val list = subnets.joinToString("\n")
+        Row(verticalAlignment = Alignment.Top) {
+            MonoBlock(list, Modifier.weight(1f))
+            CopyButton(list)
         }
     }
 }

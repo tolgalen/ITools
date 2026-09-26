@@ -38,6 +38,8 @@
     <string name="cat_measurement">Measurement</string>
     <string name="cat_text">Text</string>
     <string name="cat_data">Data</string>
+    <string name="tool_password_generator">Password generator</string>
+    <string name="tool_password_generator_desc">Generate secure random passwords or PINs, choosing the length and the characters used, with a strength indicator.</string>
     <string name="tool_token_generator">Token generator</string>
     <string name="tool_token_generator_desc">Generate random string with the chars you want, uppercase or lowercase letters, numbers and/or symbols.</string>
     <string name="tool_hash_text">Hash text</string>
@@ -98,6 +100,8 @@
     <string name="tool_xml_to_json_desc">Convert XML to JSON.</string>
     <string name="tool_json_to_xml">JSON to XML</string>
     <string name="tool_json_to_xml_desc">Convert JSON to XML.</string>
+    <string name="tool_docker_converter">Docker run ⇄ Compose converter</string>
+    <string name="tool_docker_converter_desc">Convert docker run commands to Compose files and back, choosing the Compose file format version and the indentation.</string>
     <string name="tool_markdown_to_html">Markdown to HTML</string>
     <string name="tool_markdown_to_html_desc">Convert Markdown to Html and allow to print (as PDF).</string>
     <string name="tool_url_encoder">Encode/decode url formatted strings</string>
@@ -168,6 +172,8 @@
     <string name="tool_regex_tester_desc">Test your regular expressions with sample text.</string>
     <string name="tool_regex_memo">Regex cheatsheet</string>
     <string name="tool_regex_memo_desc">Javascript Regex/Regular Expression cheatsheet.</string>
+    <string name="tool_ipv6_subnet_calculator">IPv6 subnet calculator</string>
+    <string name="tool_ipv6_subnet_calculator_desc">Parse your IPv6 prefixes: network, address range, size, address type, reverse DNS zone and subnet splitting.</string>
     <string name="tool_ipv4_subnet_calculator">IPv4 subnet calculator</string>
     <string name="tool_ipv4_subnet_calculator_desc">Parse your IPv4 CIDR blocks and get all the info you need about your subnet.</string>
     <string name="tool_ipv4_address_converter">IPv4 address converter</string>

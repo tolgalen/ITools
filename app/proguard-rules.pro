@@ -1,7 +1,4 @@
+# BouncyCastle, tomlj, snakeyaml and libphonenumber are used directly (no reflection), so R8 can shrink them
 -dontwarn org.bouncycastle.**
--keep class org.bouncycastle.** { *; }
 -dontwarn org.antlr.**
--keep class org.tomlj.** { *; }
--keep class org.snakeyaml.** { *; }
 -dontwarn javax.naming.**
--keep class com.google.i18n.phonenumbers.** { *; }

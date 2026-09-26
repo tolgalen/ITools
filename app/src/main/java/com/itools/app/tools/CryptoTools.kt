@@ -4,13 +4,20 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cash.z.ecc.android.bip39.Mnemonics
 import com.itools.app.ui.components.*
@@ -24,7 +31,6 @@ import org.bouncycastle.cms.CMSSignedData
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder
 import org.bouncycastle.crypto.engines.RC4Engine
 import org.bouncycastle.crypto.params.KeyParameter
-import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.mindrot.jbcrypt.BCrypt
 import java.nio.ByteBuffer
 import java.security.KeyPairGenerator
@@ -36,6 +42,7 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.log2
 import kotlin.math.pow
+import kotlin.math.roundToInt
 
 /* ======================= Token generator ======================= */
 
@@ -66,6 +73,134 @@ fun TokenGeneratorTool() {
         }
         OutputField(token, t("Token", "Token"), minLines = 3)
         ButtonRow { Button(onClick = { seed++ }) { Text(t("Refresh", "Regenerar")) } }
+    }
+}
+
+/* ======================= Password generator ======================= */
+
+object PasswordGen {
+    const val UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    const val LOWER = "abcdefghijklmnopqrstuvwxyz"
+    const val DIGITS = "0123456789"
+    const val SYMBOLS = "!#$%&*+-.:;=?@_~"
+
+    /** Random password that contains at least one character of each selected set (when the length allows it). */
+    fun generate(length: Int, sets: List<String>): String {
+        if (length <= 0 || sets.isEmpty()) return ""
+        val all = sets.joinToString("")
+        val chars = CharArray(length) { all[secureRandom.nextInt(all.length)] }
+        if (length >= sets.size) {
+            // One character of each set, placed at distinct random positions
+            val positions = MutableList(length) { it }.also { java.util.Collections.shuffle(it, secureRandom) }
+            sets.forEachIndexed { i, set -> chars[positions[i]] = set[secureRandom.nextInt(set.length)] }
+        }
+        return String(chars)
+    }
+
+    fun pin(length: Int): String = String(CharArray(length) { DIGITS[secureRandom.nextInt(DIGITS.length)] })
+
+    /** Entropy in bits of a string of [length] symbols drawn uniformly from an alphabet of [alphabetSize]. */
+    fun entropy(length: Int, alphabetSize: Int): Double = if (alphabetSize <= 1) 0.0 else length * log2(alphabetSize.toDouble())
+
+    enum class Strength(val en: String, val es: String, val color: Color) {
+        VERY_WEAK("Very weak", "Muy débil", Color(0xFFD03050)),
+        WEAK("Weak", "Débil", Color(0xFFD05A2A)),
+        FAIR("Fair", "Aceptable", Color(0xFFC98300)),
+        STRONG("Strong", "Segura", Color(0xFF5C9E2E)),
+        VERY_STRONG("Very strong", "Muy segura", Color(0xFF18A058));
+
+        companion object {
+            fun of(bits: Double) = when {
+                bits < 28 -> VERY_WEAK; bits < 36 -> WEAK; bits < 60 -> FAIR; bits < 80 -> STRONG; else -> VERY_STRONG
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun PasswordGeneratorTool() {
+    var pinMode by remember { mutableStateOf(false) }
+    var length by remember { mutableIntStateOf(16) }
+    var pinLength by remember { mutableIntStateOf(6) }
+    var upper by remember { mutableStateOf(true) }
+    var lower by remember { mutableStateOf(true) }
+    var digits by remember { mutableStateOf(true) }
+    var symbols by remember { mutableStateOf(false) }
+    var seed by remember { mutableIntStateOf(0) }
+    val sets = listOfNotNull(
+        PasswordGen.UPPER.takeIf { upper }, PasswordGen.LOWER.takeIf { lower },
+        PasswordGen.DIGITS.takeIf { digits }, PasswordGen.SYMBOLS.takeIf { symbols },
+    )
+    val password = remember(pinMode, length, pinLength, sets, seed) {
+        if (pinMode) PasswordGen.pin(pinLength) else PasswordGen.generate(length, sets)
+    }
+    val bits = if (pinMode) PasswordGen.entropy(pinLength, 10) else PasswordGen.entropy(length, sets.sumOf { it.length })
+    val strength = PasswordGen.Strength.of(bits)
+    val es = isSpanish()
+    ToolColumn {
+        ChipChoice(t("Type", "Tipo"), listOf(false to t("Random password", "Contraseña aleatoria"), true to "PIN"), pinMode) { pinMode = it }
+        OutputField(password, if (pinMode) "PIN" else t("Password", "Contraseña"), singleLine = true)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(color = strength.color, shape = RoundedCornerShape(6.dp)) {
+                Text(if (es) strength.es else strength.en, color = Color.White, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+            }
+            Text("%.0f bits".format(bits), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f))
+            IconButton(onClick = { seed++ }) { Icon(Icons.Outlined.Refresh, t("Regenerate", "Regenerar")) }
+        }
+        Hint(t("Time to crack by brute force: ", "Tiempo para romperla por fuerza bruta: ") + humanDuration(2.0.pow(bits) / 1e9 / 2))
+        if (pinMode) Hint(t("A PIN is only safe where the number of attempts is limited (phone lock screen, bank card...).",
+            "Un PIN solo es seguro donde el número de intentos está limitado (bloqueo del móvil, tarjeta bancaria...)."))
+        Panel {
+            if (pinMode) LengthStepper(t("PIN length", "Longitud del PIN"), pinLength, 4..12) { pinLength = it }
+            else {
+                LengthStepper(t("Password length", "Longitud de la contraseña"), length, 4..64) { length = it }
+                Text(t("Characters used", "Caracteres usados"), style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // The last selected set cannot be unchecked, so the password is never empty
+                    listOf(
+                        Triple("ABC", upper) { v: Boolean -> upper = v }, Triple("abc", lower) { v: Boolean -> lower = v },
+                        Triple("123", digits) { v: Boolean -> digits = v }, Triple("#$&", symbols) { v: Boolean -> symbols = v },
+                    ).forEach { (label, checked, onChange) ->
+                        CharsetCheck(label, checked, enabled = !(checked && sets.size == 1), onChange = onChange)
+                    }
+                }
+            }
+        }
+        Hint(t("Passwords are generated on the device with a cryptographically secure random generator.",
+            "Las contraseñas se generan en el dispositivo con un generador aleatorio criptográficamente seguro."))
+    }
+}
+
+/** Slider with − / + buttons for fine adjustment. */
+@Composable
+private fun LengthStepper(label: String, value: Int, range: IntRange, onChange: (Int) -> Unit) {
+    Column {
+        Text("$label: $value", style = MaterialTheme.typography.labelLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { onChange(value - 1) }, enabled = value > range.first) { Icon(Icons.Outlined.Remove, t("Decrease", "Reducir")) }
+            Slider(
+                value = value.toFloat(),
+                onValueChange = { onChange(it.roundToInt()) },
+                valueRange = range.first.toFloat()..range.last.toFloat(),
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { onChange(value + 1) }, enabled = value < range.last) { Icon(Icons.Outlined.Add, t("Increase", "Aumentar")) }
+        }
+    }
+}
+
+@Composable
+private fun CharsetCheck(label: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChange).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontWeight = FontWeight.Bold, fontFamily = Mono)
     }
 }
 
@@ -450,10 +585,10 @@ object PdfSignatures {
     data class Signer(val subject: String, val issuer: String, val serial: String, val from: Date, val to: Date, val valid: Boolean, val signingTime: String?)
     data class Sig(val index: Int, val coversWholeFile: Boolean, val signers: List<Signer>, val error: String? = null)
 
+    /** Signatures are verified with the platform JCA provider (the BC provider would need all of BouncyCastle kept from R8). */
     fun check(pdf: ByteArray): List<Sig> {
         val latin = String(pdf, Charsets.ISO_8859_1)
         val re = Regex("/ByteRange\\s*\\[\\s*(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s*]")
-        val bc = BouncyCastleProvider()
         return re.findAll(latin).mapIndexed { i, m ->
             runCatching {
                 val (a, b, c, d) = m.destructured.toList().map { it.toInt() }
@@ -464,7 +599,7 @@ object PdfSignatures {
                 val signers = cms.signerInfos.signers.map { s ->
                     @Suppress("UNCHECKED_CAST")
                     val holder = certs.getMatches(s.sid as org.bouncycastle.util.Selector<X509CertificateHolder>).firstOrNull() as X509CertificateHolder?
-                    val ok = holder != null && runCatching { s.verify(JcaSimpleSignerInfoVerifierBuilder().setProvider(bc).build(holder)) }.getOrDefault(false)
+                    val ok = holder != null && runCatching { s.verify(JcaSimpleSignerInfoVerifierBuilder().build(holder)) }.getOrDefault(false)
                     val st = s.signedAttributes?.get(org.bouncycastle.asn1.cms.CMSAttributes.signingTime)?.attrValues?.getObjectAt(0)
                         ?.let { runCatching { org.bouncycastle.asn1.cms.Time.getInstance(it).date.toString() }.getOrNull() }
                     Signer(
