@@ -9,6 +9,7 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil
 import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberFormat
 import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType
 import com.itools.app.ui.components.*
+import com.itools.app.util.secureRandom
 import java.util.Locale
 
 /* ======================= Phone parser ======================= */
@@ -135,6 +136,81 @@ fun IbanTool() {
             listOf("FR7630006000011234567890189", "DE89370400440532013000", "ES9121000418450200051332", "CH4431999123000889012").forEach {
                 KeyValue("", Iban.friendly(it))
             }
+        }
+    }
+}
+
+/* ======================= Spanish DNI / NIE ======================= */
+
+object Dni {
+    private const val LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+    private val SEPARATORS = Regex("[\\s.-]")
+    private val DNI = Regex("^(\\d{1,8})([A-Z]?)$")
+    private val NIE = Regex("^([XYZ])(\\d{1,7})([A-Z]?)$")
+
+    enum class Kind { DNI, NIE }
+
+    /** [letter] is the letter entered (null if missing); [expected] is the correct control letter. */
+    data class Info(val kind: Kind, val number: String, val letter: Char?, val expected: Char) {
+        val valid get() = letter == expected
+        val normalized get() = "$number$expected"
+    }
+
+    /** Control letter: remainder of the number divided by 23. */
+    fun letterFor(n: Long): Char = LETTERS[(n % 23).toInt()]
+
+    fun parse(raw: String): Info? {
+        val s = raw.replace(SEPARATORS, "").uppercase()
+        DNI.matchEntire(s)?.let { m ->
+            val number = m.groupValues[1].padStart(8, '0')
+            return Info(Kind.DNI, number, m.groupValues[2].firstOrNull(), letterFor(number.toLong()))
+        }
+        NIE.matchEntire(s)?.let { m ->
+            // For a NIE the initial X, Y or Z counts as 0, 1 or 2
+            val prefix = m.groupValues[1][0]; val digits = m.groupValues[2].padStart(7, '0')
+            return Info(Kind.NIE, "$prefix$digits", m.groupValues[3].firstOrNull(), letterFor("${"XYZ".indexOf(prefix)}$digits".toLong()))
+        }
+        return null
+    }
+
+    fun random(): String = (secureRandom.nextInt(100_000_000)).toLong().let { n -> "%08d".format(n) + letterFor(n) }
+}
+
+@Composable
+fun DniTool() {
+    var input by remember { mutableStateOf("12345678Z") }
+    val info = remember(input) { Dni.parse(input) }
+    val yes = t("Yes", "Sí"); val no = t("No", "No")
+    ToolColumn {
+        InputField(input, { input = it }, "DNI / NIE", mono = true, placeholder = "12345678Z",
+            error = if (input.isNotBlank() && info == null)
+                t("Invalid format: 8 digits and a letter (DNI) or X/Y/Z, 7 digits and a letter (NIE)",
+                    "Formato no válido: 8 dígitos y una letra (DNI) o X/Y/Z, 7 dígitos y una letra (NIE)") else null)
+        info?.let { d ->
+            Text(
+                when {
+                    d.letter == null -> t("Control letter: ", "Letra de control: ") + d.expected
+                    d.valid -> t("Valid ", "") + d.kind.name + t("", " válido")
+                    else -> t("Wrong control letter: it should be ", "Letra de control incorrecta: debería ser ") + d.expected
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = if (d.letter != null && !d.valid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            )
+            KeyValueTable(listOf(
+                t("Is valid?", "¿Es válido?") to if (d.valid) yes else no,
+                t("Type", "Tipo") to if (d.kind == Dni.Kind.DNI) t("DNI (Spanish citizens)", "DNI (ciudadanos españoles)")
+                    else t("NIE (foreign residents)", "NIE (extranjeros residentes)"),
+                t("Number", "Número") to d.number,
+                t("Letter entered", "Letra introducida") to (d.letter?.toString() ?: ""),
+                t("Correct control letter", "Letra de control correcta") to d.expected.toString(),
+                t("Normalized", "Normalizado") to d.normalized,
+            ))
+        }
+        ButtonRow { OutlinedButton(onClick = { input = Dni.random() }) { Text(t("Random valid DNI (for testing)", "DNI válido aleatorio (para pruebas)")) } }
+        Hint(t("The control letter is the remainder of dividing the number by 23, looked up in TRWAGMYFPDXBNJZSQVHLCKE. For a NIE the initial X, Y or Z is replaced by 0, 1 or 2. You can omit the letter to calculate it.",
+            "La letra de control es el resto de dividir el número entre 23, buscado en TRWAGMYFPDXBNJZSQVHLCKE. En un NIE la X, Y o Z inicial se sustituye por 0, 1 o 2. Puedes omitir la letra para calcularla."))
+        Panel(t("Valid examples", "Ejemplos válidos")) {
+            listOf("12345678Z", "00000000T", "X1234567L", "Y1234567X").forEach { KeyValue("", it) }
         }
     }
 }

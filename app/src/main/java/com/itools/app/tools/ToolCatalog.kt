@@ -93,6 +93,7 @@ object ToolCatalog {
         ToolMeta("numeronym-generator", Category.TEXT, R.string.tool_numeronym_generator, R.string.tool_numeronym_generator_desc, "Numeronym generator"),
         ToolMeta("text-to-ascii-art", Category.TEXT, R.string.tool_text_to_ascii_art, R.string.tool_text_to_ascii_art_desc, "ASCII Art Text Generator"),
         ToolMeta("phone-parser-and-formatter", Category.DATA, R.string.tool_phone_parser_and_formatter, R.string.tool_phone_parser_and_formatter_desc, "Phone parser and formatter"),
+        ToolMeta("dni-validator", Category.DATA, R.string.tool_dni_validator, R.string.tool_dni_validator_desc, "Spanish DNI / NIE validator"),
         ToolMeta("iban-validator-and-parser", Category.DATA, R.string.tool_iban_validator_and_parser, R.string.tool_iban_validator_and_parser_desc, "IBAN validator and parser"),
     )
 

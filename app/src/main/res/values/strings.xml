@@ -214,6 +214,8 @@
     <string name="tool_text_to_ascii_art_desc">Create ASCII art text with many fonts and styles.</string>
     <string name="tool_phone_parser_and_formatter">Phone parser and formatter</string>
     <string name="tool_phone_parser_and_formatter_desc">Parse, validate and format phone numbers. Get information about the phone number, like the country code, type, etc.</string>
+    <string name="tool_dni_validator">Spanish DNI / NIE validator</string>
+    <string name="tool_dni_validator_desc">Check whether a Spanish DNI or NIE is valid and calculate its control letter.</string>
     <string name="tool_iban_validator_and_parser">IBAN validator and parser</string>
     <string name="tool_iban_validator_and_parser_desc">Validate and parse IBAN numbers. Check if an IBAN is valid and get the country, BBAN, if it is a QR-IBAN and the IBAN friendly format.</string>
     <string name="theme_black">Black (OLED)</string>

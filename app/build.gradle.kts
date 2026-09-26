@@ -20,8 +20,8 @@ android {
         applicationId = "com.itools.app"
         minSdk = 29          // Android 10
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
         vectorDrawables { useSupportLibrary = true }
     }
 

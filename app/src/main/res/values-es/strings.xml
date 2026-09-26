@@ -213,6 +213,8 @@
     <string name="tool_text_to_ascii_art_desc">Crea texto en arte ASCII con varias fuentes.</string>
     <string name="tool_phone_parser_and_formatter">Analizador de teléfonos</string>
     <string name="tool_phone_parser_and_formatter_desc">Analiza, valida y formatea números de teléfono (país, tipo...).</string>
+    <string name="tool_dni_validator">Validador de DNI / NIE</string>
+    <string name="tool_dni_validator_desc">Comprueba si un DNI o NIE español es válido y calcula su letra de control.</string>
     <string name="tool_iban_validator_and_parser">Validador de IBAN</string>
     <string name="tool_iban_validator_and_parser_desc">Valida y analiza IBAN: país, BBAN, QR-IBAN y formato legible.</string>
     <string name="theme_black">Negro (OLED)</string>

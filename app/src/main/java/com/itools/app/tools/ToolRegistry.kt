@@ -95,6 +95,7 @@ fun ToolContent(id: String) {
         "numeronym-generator" -> NumeronymTool()
         "text-to-ascii-art" -> AsciiArtTool()
         "phone-parser-and-formatter" -> PhoneParserTool()
+        "dni-validator" -> DniTool()
         "iban-validator-and-parser" -> IbanTool()
         else -> Text("Unknown tool: $id")
     }

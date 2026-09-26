@@ -70,6 +70,9 @@ fun HomeScreen(store: SettingsStore, onOpenTool: (String) -> Unit, onOpenList: (
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     val texts = rememberToolTexts()
+    val ctx = LocalContext.current
+    // Read from the installed package, so it always matches versionName in build.gradle.kts
+    val version = remember { runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull().orEmpty() }
 
     val results = remember(query, texts) {
         val q = norm(query.trim())
@@ -89,7 +92,15 @@ fun HomeScreen(store: SettingsStore, onOpenTool: (String) -> Unit, onOpenList: (
             TopAppBar(
                 title = {
                     Column {
-                        Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold)
+                            Text(
+                                "v$version",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+                            )
+                        }
                         Text(
                             stringResource(R.string.tools_count, ToolCatalog.entries.size),
                             style = MaterialTheme.typography.labelMedium,

@@ -103,5 +103,6 @@ private val ToolIcons: Map<String, ImageVector> = mapOf(
     "numeronym-generator" to Icons.Outlined.Title,
     "text-to-ascii-art" to Icons.Outlined.Brush,
     "phone-parser-and-formatter" to Icons.Outlined.Phone,
+    "dni-validator" to Icons.Outlined.Badge,
     "iban-validator-and-parser" to Icons.Outlined.AccountBalance,
 )
