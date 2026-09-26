@@ -1,0 +1,7 @@
+-dontwarn org.bouncycastle.**
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.antlr.**
+-keep class org.tomlj.** { *; }
+-keep class org.snakeyaml.** { *; }
+-dontwarn javax.naming.**
+-keep class com.google.i18n.phonenumbers.** { *; }
