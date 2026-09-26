@@ -2,7 +2,7 @@ package com.itools.app.util
 
 import kotlin.math.*
 
-/** Color RGBA en [0,1]. Conversión entre hex, rgb, hsl, hwb, cmyk, lch y nombres CSS. */
+/** RGBA color in [0,1]. Conversion between hex, rgb, hsl, hwb, cmyk, lch and CSS names. */
 data class Rgba(val r: Double, val g: Double, val b: Double, val a: Double = 1.0) {
     val r8 get() = (r * 255).roundToInt().coerceIn(0, 255)
     val g8 get() = (g * 255).roundToInt().coerceIn(0, 255)
@@ -34,6 +34,10 @@ object ColorConv {
         "steelblue 4682b4 tan d2b48c teal 008080 thistle d8bfd8 tomato ff6347 turquoise 40e0d0 violet ee82ee wheat f5deb3 " +
         "white ffffff whitesmoke f5f5f5 yellow ffff00 yellowgreen 9acd32"
     val names: Map<String, String> = NAMES_RAW.split(" ").chunked(2).associate { it[0] to it[1] }
+    /** hex → first CSS name (same order as [names]). */
+    private val namesByHex: Map<String, String> = LinkedHashMap<String, String>().apply { names.forEach { (n, h) -> putIfAbsent(h, n) } }
+    private val HEX_RE = Regex("[0-9a-f]{3,8}")
+    private val ARGS_SPLIT = Regex("[\\s,/]+")
 
     private fun num(s: String, scale: Double): Double {
         val t = s.trim()
@@ -49,13 +53,13 @@ object ColorConv {
         }.mod(360.0)
     }
     private fun args(s: String): List<String> =
-        s.substringAfter('(').substringBeforeLast(')').split(Regex("[\\s,/]+")).filter { it.isNotBlank() }
+        s.substringAfter('(').substringBeforeLast(')').split(ARGS_SPLIT).filter { it.isNotBlank() }
 
     fun parse(input: String): Rgba? = runCatching {
         val s = input.trim().lowercase()
         names[s]?.let { return@runCatching parse("#$it") }
         when {
-            s.startsWith("#") || s.matches(Regex("[0-9a-f]{3,8}")) -> {
+            s.startsWith("#") || HEX_RE.matches(s) -> {
                 var h = s.removePrefix("#")
                 if (h.length == 3 || h.length == 4) h = h.map { "$it$it" }.joinToString("")
                 require(h.length == 6 || h.length == 8)
@@ -103,7 +107,7 @@ object ColorConv {
         return Triple(h, s, l)
     }
 
-    // --- CIE LCH (D50, como CSS Color 4) ---
+    // --- CIE LCH (D50, as in CSS Color 4) ---
     private fun lin(v: Double) = if (v <= 0.04045) v / 12.92 else ((v + 0.055) / 1.055).pow(2.4)
     private fun gam(v: Double) = if (v <= 0.0031308) 12.92 * v else 1.055 * v.pow(1 / 2.4) - 0.055
     private const val XN = 0.96422; private const val YN = 1.0; private const val ZN = 0.82521
@@ -142,12 +146,13 @@ object ColorConv {
 
     fun formats(c: Rgba): List<Pair<String, String>> {
         val (h, s, l) = toHsl(c)
-        val hex = "#%02x%02x%02x".format(c.r8, c.g8, c.b8) + if (c.a < 1) "%02x".format((c.a * 255).roundToInt()) else ""
+        val rgbHex = "%02x%02x%02x".format(c.r8, c.g8, c.b8)
+        val hex = "#$rgbHex" + if (c.a < 1) "%02x".format((c.a * 255).roundToInt()) else ""
         val w = minOf(c.r, c.g, c.b); val bl = 1 - maxOf(c.r, c.g, c.b)
         val k = 1 - maxOf(c.r, c.g, c.b)
         val (cc, mm, yy) = if (k >= 1) Triple(0.0, 0.0, 0.0) else Triple((1 - c.r - k) / (1 - k), (1 - c.g - k) / (1 - k), (1 - c.b - k) / (1 - k))
         val (ll, lc, lh) = toLch(c)
-        val name = names.entries.firstOrNull { it.value == "%02x%02x%02x".format(c.r8, c.g8, c.b8) && c.a >= 1 }?.key ?: "—"
+        val name = (if (c.a >= 1) namesByHex[rgbHex] else null) ?: "—"
         return listOf(
             "name" to name,
             "hex" to hex,

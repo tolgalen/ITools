@@ -26,7 +26,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Persistencia del idioma por app en Android < 13 -->
+        <!-- Per-app language persistence on Android < 13 -->
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"

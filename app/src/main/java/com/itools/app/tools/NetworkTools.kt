@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-/* ======================= Utilidades IPv4 ======================= */
+/* ======================= IPv4 utilities ======================= */
 
 object Ipv4 {
     fun parse(s: String): Long? {
@@ -48,7 +48,7 @@ object Ipv4 {
         val size get() = 1L shl (32 - bits)
     }
 
-    /** Acepta "a.b.c.d/nn", "a.b.c.d nn.nn.nn.nn", "a.b.c.d/nn.nn.nn.nn" o "a.b.c.d" (/32). */
+    /** Accepts "a.b.c.d/nn", "a.b.c.d nn.nn.nn.nn", "a.b.c.d/nn.nn.nn.nn" or "a.b.c.d" (/32). */
     fun parseSubnet(s: String): Subnet? {
         val parts = s.trim().split(Regex("[/\\s]+"))
         val ip = parse(parts[0]) ?: return null

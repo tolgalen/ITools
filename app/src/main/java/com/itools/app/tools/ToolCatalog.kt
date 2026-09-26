@@ -2,7 +2,7 @@ package com.itools.app.tools
 
 import com.itools.app.R
 
-/** Catálogo generado: id, categoría y recursos de texto de cada herramienta. */
+/** Generated catalog: id, category and string resources of each tool. */
 object ToolCatalog {
     val entries: List<ToolMeta> = listOf(
         ToolMeta("token-generator", Category.CRYPTO, R.string.tool_token_generator, R.string.tool_token_generator_desc, "Token generator"),

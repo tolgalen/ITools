@@ -60,7 +60,7 @@ object MathEval {
                     c == '*' -> { i++; v * unary() }
                     c == '/' -> { i++; v / unary() }
                     c == '%' -> { i++; v.mod(unary()) }
-                    // multiplicación implícita: 2pi, 3(4), 2sqrt(4)
+                    // implicit multiplication: 2pi, 3(4), 2sqrt(4)
                     c != null && (c == '(' || c.isLetter()) -> v * unary()
                     else -> return v
                 }
@@ -282,10 +282,12 @@ fun TemperatureTool() {
 
 /* ======================= Benchmark builder ======================= */
 
+private val MEASURE_SEPARATORS = Regex("[\\s;]+")
+
 private class Suite(title: String, values: String) {
     var title by mutableStateOf(title)
     var values by mutableStateOf(values)
-    val numbers get() = values.split(Regex("[\\s;]+")).mapNotNull { it.replace(',', '.').toDoubleOrNull() }
+    val numbers get() = values.split(MEASURE_SEPARATORS).mapNotNull { it.replace(',', '.').toDoubleOrNull() }
 }
 
 @Composable

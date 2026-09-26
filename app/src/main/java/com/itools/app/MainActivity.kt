@@ -16,7 +16,7 @@ import com.itools.app.ui.AppNav
 import com.itools.app.ui.components.ProvideLanguage
 import com.itools.app.ui.theme.IToolsTheme
 
-// AppCompatActivity es necesaria para el cambio de idioma por app (AppCompatDelegate.setApplicationLocales).
+// AppCompatActivity is required for per-app language switching (AppCompatDelegate.setApplicationLocales).
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,14 +27,14 @@ class MainActivity : AppCompatActivity() {
             val dark = when (mode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
+                ThemeMode.DARK, ThemeMode.DARK_BLUE, ThemeMode.BLACK, ThemeMode.GREEN -> true
             }
             LaunchedEffect(dark) {
                 val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
                 else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            IToolsTheme(dark = dark, dynamic = dynamic) {
+            IToolsTheme(mode = mode, dark = dark, dynamic = dynamic) {
                 ProvideLanguage { AppNav(store) }
             }
         }

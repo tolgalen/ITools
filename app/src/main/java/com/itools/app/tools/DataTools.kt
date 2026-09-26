@@ -9,7 +9,6 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil
 import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberFormat
 import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType
 import com.itools.app.ui.components.*
-import java.math.BigInteger
 import java.util.Locale
 
 /* ======================= Phone parser ======================= */
@@ -59,12 +58,12 @@ fun PhoneParserTool() {
 /* ======================= IBAN ======================= */
 
 object Iban {
-    /** Longitud del IBAN por país (registro SWIFT). */
+    /** IBAN length per country (SWIFT registry). */
     val LENGTHS: Map<String, Int> = ("AD24 AE23 AL28 AT20 AZ28 BA20 BE16 BG22 BH22 BI27 BR29 BY28 CH21 CR22 CY28 CZ24 DE22 DJ27 DK18 DO28 EE20 EG29 " +
         "ES24 FI18 FK18 FO18 FR27 GB22 GE22 GI23 GL18 GR27 GT28 HR21 HU28 IE22 IL23 IQ23 IS26 IT27 JO30 KW30 KZ20 LB28 LC32 LI21 LT20 " +
         "LU20 LV21 LY25 MC27 MD24 ME22 MK19 MN20 MR27 MT31 MU30 NI28 NL18 NO15 OM23 PK24 PL28 PS29 PT25 QA29 RO24 RS22 RU33 SA24 SC31 " +
         "SD18 SE24 SI19 SK24 SM27 SO23 ST25 SV28 TL23 TN24 TR26 UA29 VA22 VG24 XK20 YE30 " +
-        // territorios que usan el formato de su país
+        // territories that use their country's format
         "GF27 GP27 MQ27 RE27 PF27 TF27 YT27 NC27 BL27 MF27 PM27 WF27 AX18 GG22 IM22 JE22")
         .split(" ").associate { it.substring(0, 2) to it.substring(2).toInt() }
 
@@ -75,17 +74,24 @@ object Iban {
         CHECKSUM("Invalid checksum (mod 97)", "Dígitos de control incorrectos (mod 97)"),
     }
 
-    fun clean(s: String) = s.replace(Regex("[\\s-]"), "").uppercase()
+    private val SEPARATORS = Regex("[\\s-]")
+    private val FORMAT = Regex("^[A-Z]{2}[0-9]{2}[A-Z0-9]+$")
+    private val QR_COUNTRIES = setOf("CH", "LI")
 
+    fun clean(s: String) = s.replace(SEPARATORS, "").uppercase()
+
+    /** Mod 97 remainder computed digit by digit (avoids building a BigInteger). */
     fun mod97(iban: String): Int {
-        val rearranged = iban.substring(4) + iban.substring(0, 4)
-        val digits = rearranged.map { if (it.isDigit()) it.toString() else (it - 'A' + 10).toString() }.joinToString("")
-        return BigInteger(digits).mod(BigInteger.valueOf(97)).toInt()
+        var r = 0
+        for (c in iban.substring(4) + iban.substring(0, 4)) {
+            r = if (c.isDigit()) (r * 10 + (c - '0')) % 97 else (r * 100 + (c - 'A' + 10)) % 97
+        }
+        return r
     }
 
     fun validate(raw: String): List<Error> {
         val s = clean(raw)
-        if (!Regex("^[A-Z]{2}[0-9]{2}[A-Z0-9]+$").matches(s)) return listOf(Error.CHARS)
+        if (!FORMAT.matches(s)) return listOf(Error.CHARS)
         val errs = mutableListOf<Error>()
         val len = LENGTHS[s.substring(0, 2)]
         if (len == null) errs += Error.COUNTRY else if (s.length != len) errs += Error.LENGTH
@@ -93,10 +99,10 @@ object Iban {
         return errs
     }
 
-    /** QR-IBAN (Suiza / Liechtenstein): IID entre 30000 y 31999. */
+    /** QR-IBAN (Switzerland / Liechtenstein): IID between 30000 and 31999. */
     fun isQrIban(raw: String): Boolean {
         val s = clean(raw)
-        if (s.length < 9 || s.substring(0, 2) !in setOf("CH", "LI")) return false
+        if (s.length < 9 || s.substring(0, 2) !in QR_COUNTRIES) return false
         val iid = s.substring(4, 9).toIntOrNull() ?: return false
         return iid in 30000..31999
     }

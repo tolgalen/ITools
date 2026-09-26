@@ -54,7 +54,7 @@ fun TokenGeneratorTool() {
             if (numbers) append("0123456789")
             if (symbols) append(".,;:!?./-\"'#{([-|\\@)]=}*+")
         }
-        if (alphabet.isEmpty()) "" else (1..length).map { alphabet[secureRandom.nextInt(alphabet.length)] }.joinToString("")
+        if (alphabet.isEmpty()) "" else String(CharArray(length) { alphabet[secureRandom.nextInt(alphabet.length)] })
     }
     ToolColumn {
         Panel {
@@ -77,10 +77,12 @@ fun HashTextTool() {
     var enc by remember { mutableStateOf(OutEncoding.HEX) }
     ToolColumn {
         InputField(text, { text = it }, t("Your text to hash", "Texto a hashear"), singleLine = false, minLines = 3)
-        Dropdown(t("Digest encoding", "Codificación del resultado"), OutEncoding.entries.map { it to it.label }, enc, { enc = it })
-        HashAlgo.entries.forEach { a ->
-            OutputField(digest(a, text.toByteArray()).encode(enc), a.label, singleLine = true)
+        Dropdown(t("Digest encoding", "Codificación del resultado"), OutEncoding.entries.map { it to it.label }, enc) { enc = it }
+        val hashes = remember(text, enc) {
+            val bytes = text.toByteArray()
+            HashAlgo.entries.map { it.label to digest(it, bytes).encode(enc) }
         }
+        hashes.forEach { (label, h) -> OutputField(h, label, singleLine = true) }
     }
 }
 
@@ -135,7 +137,7 @@ object Uuids {
     private var clockSeq = secureRandom.nextInt(0x4000)
     private val node = randomBytes(6).also { it[0] = (it[0].toInt() or 1).toByte() }
     fun v1(): UUID {
-        // timestamp en intervalos de 100 ns desde 1582-10-15
+        // timestamp in 100 ns intervals since 1582-10-15
         val ts = System.currentTimeMillis() * 10_000 + 0x01B21DD213814000L + (System.nanoTime() / 100 % 10_000)
         val timeLow = ts and 0xffffffffL
         val timeMid = (ts ushr 32) and 0xffff
@@ -209,12 +211,12 @@ fun UlidGeneratorTool() {
     }
 }
 
-/* ======================= Encrypt / decrypt (compatible con CryptoJS) ======================= */
+/* ======================= Encrypt / decrypt (CryptoJS compatible) ======================= */
 
 object CryptoJs {
     enum class Algo(val label: String, val keyLen: Int, val ivLen: Int) { AES("AES", 32, 16), TDES("TripleDES", 24, 8), RC4("RC4", 32, 0) }
 
-    /** EVP_BytesToKey con MD5, como OpenSSL/CryptoJS. */
+    /** EVP_BytesToKey with MD5, like OpenSSL/CryptoJS. */
     private fun evp(pass: ByteArray, salt: ByteArray, keyLen: Int, ivLen: Int): Pair<ByteArray, ByteArray> {
         val out = java.io.ByteArrayOutputStream()
         var prev = ByteArray(0)
@@ -340,8 +342,8 @@ fun HmacTool() {
     ToolColumn {
         InputField(text, { text = it }, t("Plain text to compute the hash", "Texto plano"), singleLine = false, minLines = 3)
         InputField(key, { key = it }, t("Secret key", "Clave secreta"))
-        Dropdown(t("Hashing function", "Función hash"), HashAlgo.entries.map { it to it.label }, algo, { algo = it })
-        Dropdown(t("Output encoding", "Codificación"), OutEncoding.entries.map { it to it.label }, enc, { enc = it })
+        Dropdown(t("Hashing function", "Función hash"), HashAlgo.entries.map { it to it.label }, algo) { algo = it }
+        Dropdown(t("Output encoding", "Codificación"), OutEncoding.entries.map { it to it.label }, enc) { enc = it }
         OutputField(out, "HMAC", minLines = 2)
     }
 }
@@ -364,7 +366,7 @@ fun RsaTool() {
             KeyPairGenerator.getInstance("RSA").apply { initialize(bits) }.generateKeyPair()
         }
         pub = pem("PUBLIC KEY", kp.public.encoded)
-        // PKCS#1 ("RSA PRIVATE KEY"), igual que node-forge en it-tools
+        // PKCS#1 ("RSA PRIVATE KEY"), same as node-forge in it-tools
         val pkcs1 = PrivateKeyInfo.getInstance(kp.private.encoded).parsePrivateKey().toASN1Primitive().encoded
         priv = pem("RSA PRIVATE KEY", pkcs1)
         busy = false

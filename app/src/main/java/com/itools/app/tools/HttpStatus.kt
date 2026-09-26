@@ -1,6 +1,6 @@
 package com.itools.app.tools
 
-/** Códigos HTTP: código, nombre, descripción (EN), descripción (ES). */
+/** HTTP status codes: code, name, description (EN), description (ES). */
 object HttpStatus {
     data class Code(val code: Int, val name: String, val en: String, val es: String)
     val categories = listOf(

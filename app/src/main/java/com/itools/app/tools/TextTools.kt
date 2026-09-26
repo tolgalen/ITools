@@ -85,25 +85,36 @@ fun formatBytes(n: Long): String {
     return "%.2f %s".format(v, units[i])
 }
 
+private val WORD = Regex("\\S+")
+private val SENTENCE = Regex("[^.!?\\s][^.!?]*(?:[.!?](?!['\"]?\\s|$)[^.!?]*)*[.!?]?['\"]?(?=\\s|$)")
+private val PARAGRAPH_BREAK = Regex("\\n\\s*\\n")
+
+private class TextStats(val chars: Int, val nonSpace: Int, val words: Int, val lines: Int, val sentences: Int, val paragraphs: Int, val bytes: Long)
+
+private fun textStats(text: String) = TextStats(
+    chars = text.codePointCount(0, text.length),
+    nonSpace = text.count { !it.isWhitespace() },
+    words = WORD.findAll(text).count(),
+    lines = if (text.isEmpty()) 0 else text.lines().size,
+    sentences = SENTENCE.findAll(text).count(),
+    paragraphs = text.split(PARAGRAPH_BREAK).count { it.isNotBlank() },
+    bytes = text.toByteArray(Charsets.UTF_8).size.toLong(),
+)
+
 @Composable
 fun TextStatsTool() {
     var text by remember { mutableStateOf("") }
-    val chars = text.codePointCount(0, text.length)
-    val words = Regex("\\S+").findAll(text).count()
-    val lines = if (text.isEmpty()) 0 else text.lines().size
-    val sentences = Regex("[^.!?\\s][^.!?]*(?:[.!?](?!['\"]?\\s|$)[^.!?]*)*[.!?]?['\"]?(?=\\s|$)").findAll(text).count()
-    val paragraphs = text.split(Regex("\\n\\s*\\n")).count { it.isNotBlank() }
-    val bytes = text.toByteArray(Charsets.UTF_8).size.toLong()
+    val st = remember(text) { textStats(text) }
     ToolColumn {
         InputField(text, { text = it }, t("Your text", "Tu texto"), singleLine = false, minLines = 8)
         KeyValueTable(listOf(
-            t("Character count", "Caracteres") to chars.toString(),
-            t("Characters (no spaces)", "Caracteres (sin espacios)") to text.count { !it.isWhitespace() }.toString(),
-            t("Word count", "Palabras") to words.toString(),
-            t("Line count", "Líneas") to lines.toString(),
-            t("Sentences", "Frases") to sentences.toString(),
-            t("Paragraphs", "Párrafos") to paragraphs.toString(),
-            t("Byte size", "Tamaño en bytes") to "${formatBytes(bytes)} ($bytes B)",
+            t("Character count", "Caracteres") to st.chars.toString(),
+            t("Characters (no spaces)", "Caracteres (sin espacios)") to st.nonSpace.toString(),
+            t("Word count", "Palabras") to st.words.toString(),
+            t("Line count", "Líneas") to st.lines.toString(),
+            t("Sentences", "Frases") to st.sentences.toString(),
+            t("Paragraphs", "Párrafos") to st.paragraphs.toString(),
+            t("Byte size", "Tamaño en bytes") to "${formatBytes(st.bytes)} (${st.bytes} B)",
         ), copy = false)
     }
 }
@@ -263,7 +274,7 @@ fun ObfuscatorTool() {
 object Diff {
     enum class Op { EQ, ADD, DEL }
     fun diff(a: List<String>, b: List<String>): List<Pair<Op, String>> {
-        // Recorta prefijo/sufijo comunes para acelerar
+        // Trim the common prefix/suffix to speed things up
         var pre = 0
         while (pre < a.size && pre < b.size && a[pre] == b[pre]) pre++
         var suf = 0
@@ -292,7 +303,8 @@ object Diff {
         a.takeLast(suf).forEach { out += Op.EQ to it }
         return out
     }
-    fun tokens(s: String): List<String> = Regex("\\s+|[^\\s]+").findAll(s).map { it.value }.toList()
+    private val TOKEN = Regex("\\s+|[^\\s]+")
+    fun tokens(s: String): List<String> = TOKEN.findAll(s).map { it.value }.toList()
 }
 
 @Composable
@@ -306,7 +318,7 @@ fun TextDiffTool() {
         InputField(a, { a = it }, t("Original text", "Texto original"), singleLine = false, minLines = 4, mono = true)
         InputField(b, { b = it }, t("Modified text", "Texto modificado"), singleLine = false, minLines = 4, mono = true)
         ChipChoice(null, listOf(false to t("By line", "Por línea"), true to t("By word", "Por palabra")), byWord) { byWord = it }
-        val adds = d.count { it.first == Diff.Op.ADD }; val dels = d.count { it.first == Diff.Op.DEL }
+        val (adds, dels) = remember(d) { d.count { it.first == Diff.Op.ADD } to d.count { it.first == Diff.Op.DEL } }
         Hint("+$adds  −$dels")
         Panel {
             Text(buildAnnotatedString {
@@ -327,6 +339,8 @@ fun TextDiffTool() {
 
 /* ======================= Numeronym ======================= */
 
+private val WHITESPACE = Regex("\\s+")
+
 fun numeronym(word: String): String {
     val w = word.trim()
     return if (w.length <= 3) w else "${w.first()}${w.length - 2}${w.last()}"
@@ -337,7 +351,7 @@ fun NumeronymTool() {
     var word by remember { mutableStateOf("") }
     ToolColumn {
         InputField(word, { word = it }, t("Enter a word, e.g. 'internationalization'", "Escribe una palabra, p. ej. 'internationalization'"))
-        OutputField(word.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ") { numeronym(it) },
+        OutputField(word.split(WHITESPACE).filter { it.isNotEmpty() }.joinToString(" ") { numeronym(it) },
             t("Your numeronym will be here, e.g. 'i18n'", "Aquí aparecerá tu numerónimo, p. ej. 'i18n'"), singleLine = true)
     }
 }
@@ -376,7 +390,7 @@ object AsciiArt {
         text.lines().joinToString("\n\n") { line -> renderLine(line, style, spacing, maxWidth) }
 
     private fun renderLine(line: String, style: Style, spacing: Int, maxWidth: Int): String {
-        // Divide en fragmentos que quepan en maxWidth columnas
+        // Split into chunks that fit in maxWidth columns
         val chunks = mutableListOf<String>(); var cur = StringBuilder(); var w = 0
         for (c in line) {
             val gw = glyph(c)[0].length + spacing
@@ -403,7 +417,7 @@ object AsciiArt {
                 (listOf("╔$border╗") + body.map { "║ " + it.padEnd(width) + " ║" } + listOf("╚$border╝")).joinToString("\n")
             }
             else -> {
-                // Para LETTERS cada columna usa la letra de su glifo
+                // For LETTERS each column uses the letter of its glyph
                 val letterMap = if (style == Style.LETTERS) buildString {
                     chunk.forEach { c -> append(c.uppercaseChar().toString().repeat(glyph(c)[0].length)); append(" ".repeat(spacing)) }
                 } else ""

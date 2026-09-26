@@ -11,6 +11,7 @@
     <string name="theme_system">System default</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <string name="theme_dark_blue">Dark blue</string>
     <string name="language">Language</string>
     <string name="lang_system">System default</string>
     <string name="lang_en">English</string>
@@ -209,4 +210,21 @@
     <string name="tool_phone_parser_and_formatter_desc">Parse, validate and format phone numbers. Get information about the phone number, like the country code, type, etc.</string>
     <string name="tool_iban_validator_and_parser">IBAN validator and parser</string>
     <string name="tool_iban_validator_and_parser_desc">Validate and parse IBAN numbers. Check if an IBAN is valid and get the country, BBAN, if it is a QR-IBAN and the IBAN friendly format.</string>
+    <string name="theme_black">Black (OLED)</string>
+    <string name="theme_green">it-tools green</string>
+    <string name="tile_favorites">Favorites</string>
+    <string name="tile_all">All</string>
+    <string name="more_options">More options</string>
+    <string name="list_empty">There are no tools here yet.</string>
+    <string name="backup">Backup</string>
+    <string name="backup_help">Save your settings (theme, language and favorite tools) to a JSON file, or restore them from one.</string>
+    <string name="backup_create">Create backup</string>
+    <string name="backup_restore">Restore</string>
+    <string name="backup_saved">Backup saved</string>
+    <string name="backup_restored">Settings restored</string>
+    <string name="backup_error">Could not save the backup</string>
+    <string name="backup_invalid">The file is not a valid ITools backup</string>
+    <string name="license">License</string>
+    <string name="license_text">ITools is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 3 (GPL-3.0) as published by the Free Software Foundation. It is distributed WITHOUT ANY WARRANTY; see the license for details.</string>
+    <string name="license_link">GNU GPL v3.0</string>
 </resources>

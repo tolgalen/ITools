@@ -49,7 +49,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/* ======================= Componente: campo de color ======================= */
+/* ======================= Component: color field ======================= */
 
 @Composable
 private fun ColorInput(label: String, value: String, onChange: (String) -> Unit) {
@@ -116,7 +116,8 @@ fun QrCodeTool() {
 /* ======================= WiFi QR code ======================= */
 
 object WifiQr {
-    private fun esc(s: String) = s.replace(Regex("([\\\\;,:\"])"), "\\\\$1")
+    private val SPECIAL = Regex("([\\\\;,:\"])")
+    private fun esc(s: String) = s.replace(SPECIAL, "\\\\$1")
     fun build(ssid: String, password: String, enc: String, hidden: Boolean,
               eapMethod: String = "", identity: String = "", anonymous: Boolean = false, phase2: String = ""): String {
         if (ssid.isEmpty()) return ""
@@ -213,7 +214,7 @@ fun SvgPlaceholderTool() {
         ButtonRow {
             Button(onClick = { save.launch("placeholder.svg") }) { Text(t("Download SVG", "Guardar SVG")) }
         }
-        // Vista previa dibujada con Canvas (Android no renderiza SVG de forma nativa)
+        // Preview drawn with Canvas (Android does not render SVG natively)
         Canvas(Modifier.fillMaxWidth().aspectRatio(w.toFloat() / h.coerceAtLeast(1))) {
             drawRect(Color(bgC))
             val scale = size.width / w

@@ -15,6 +15,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,8 +73,9 @@ object HtmlEntities {
         "deg" to "°", "plusmn" to "±", "times" to "×", "divide" to "÷", "hellip" to "…", "mdash" to "—", "ndash" to "–",
         "laquo" to "«", "raquo" to "»", "iexcl" to "¡", "iquest" to "¿", "ntilde" to "ñ", "Ntilde" to "Ñ",
         "aacute" to "á", "eacute" to "é", "iacute" to "í", "oacute" to "ó", "uacute" to "ú", "uuml" to "ü")
+    private val ENTITY = Regex("&(#x[0-9a-fA-F]+|#\\d+|[a-zA-Z]+);")
     fun escape(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
-    fun unescape(s: String) = Regex("&(#x[0-9a-fA-F]+|#\\d+|[a-zA-Z]+);").replace(s) { m ->
+    fun unescape(s: String) = ENTITY.replace(s) { m ->
         val e = m.groupValues[1]
         when {
             e.startsWith("#x") || e.startsWith("#X") -> e.drop(2).toIntOrNull(16)?.let { String(Character.toChars(it)) }
@@ -216,7 +219,7 @@ fun MetaTagTool() {
     }.trimEnd()
     ToolColumn {
         Panel(t("General information", "Información general")) {
-            Dropdown(t("Page type", "Tipo de página"), listOf("website", "article", "book", "profile", "music.song", "music.album", "video.movie", "video.episode").map { it to it }, type, { type = it })
+            Dropdown(t("Page type", "Tipo de página"), listOf("website", "article", "book", "profile", "music.song", "music.album", "video.movie", "video.episode").map { it to it }, type) { type = it }
             InputField(title, { title = it }, t("Title", "Título"))
             InputField(desc, { desc = it }, t("Description", "Descripción"), singleLine = false, minLines = 2)
             InputField(url, { url = it }, t("Page URL", "URL de la página"))
@@ -227,7 +230,7 @@ fun MetaTagTool() {
             InputField(imageAlt, { imageAlt = it }, t("Image alt", "Texto alternativo"))
         }
         Panel("Twitter") {
-            Dropdown(t("Card type", "Tipo de tarjeta"), listOf("summary", "summary_large_image", "app", "player").map { it to it }, card, { card = it })
+            Dropdown(t("Card type", "Tipo de tarjeta"), listOf("summary", "summary_large_image", "app", "player").map { it to it }, card) { card = it }
             InputField(twSite, { twSite = it }, t("Site account (@...)", "Cuenta del sitio (@...)"))
             InputField(twCreator, { twCreator = it }, t("Creator account (@...)", "Cuenta del autor (@...)"))
         }
@@ -254,19 +257,22 @@ fun OtpTool() {
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(250) } }
     val period = 30
     val counter = now / 1000 / period
-    val key = runCatching { Base32.decode(secret) }.getOrNull()?.takeIf { it.isNotEmpty() }
-    val uri = "otpauth://totp/IT-Tools:demo-user?issuer=IT-Tools&secret=${secret.uppercase()}&algorithm=SHA1&digits=6&period=$period"
+    // Depends only on the secret: not recomputed on every clock tick
+    val key = remember(secret) { runCatching { Base32.decode(secret) }.getOrNull()?.takeIf { it.isNotEmpty() } }
+    val uri = remember(secret) { "otpauth://totp/IT-Tools:demo-user?issuer=IT-Tools&secret=${secret.uppercase()}&algorithm=SHA1&digits=6&period=$period" }
     val qr = remember(uri) { Qr.bitmap(uri, 480) }
+    // Previous / current / next codes: change only when the counter changes (every 30 s)
+    val codes = remember(key, counter) { key?.let { k -> (-1L..1L).map { Otp.hotp(k, counter + it) } } }
     ToolColumn {
         InputField(secret, { secret = it.uppercase() }, t("Secret (base32)", "Secreto (base32)"), mono = true,
             error = if (key == null) t("Secret should be a base32 string", "El secreto debe estar en base32") else null,
-            trailing = { IconButton(onClick = { secret = Base32.encode(randomBytes(10)) }) { Icon(androidx.compose.material.icons.Icons.Outlined.Refresh, null) } })
-        if (key != null) {
+            trailing = { IconButton(onClick = { secret = Base32.encode(randomBytes(10)) }) { Icon(Icons.Outlined.Refresh, null) } })
+        if (key != null && codes != null) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(-1L to t("Previous", "Anterior"), 0L to t("Current OTP", "OTP actual"), 1L to t("Next", "Siguiente")).forEach { (d, l) ->
                     Panel {
                         Text(l, style = MaterialTheme.typography.labelSmall)
-                        Text(Otp.hotp(key, counter + d), style = if (d == 0L) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
+                        Text(codes[(d + 1).toInt()], style = if (d == 0L) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
                             fontWeight = if (d == 0L) FontWeight.Bold else FontWeight.Normal, fontFamily = Mono)
                     }.let { }
                 }
@@ -274,7 +280,7 @@ fun OtpTool() {
             val remaining = period - (now / 1000 % period)
             LinearProgressIndicator(progress = { remaining / period.toFloat() }, modifier = Modifier.fillMaxWidth())
             Hint(t("Next in ${remaining}s", "Siguiente en ${remaining}s"))
-            OutputField(Otp.hotp(key, counter), t("Current code", "Código actual"), singleLine = true)
+            OutputField(codes[1], t("Current code", "Código actual"), singleLine = true)
             qr?.let { Image(it.asImageBitmap(), null, Modifier.size(220.dp).align(Alignment.CenterHorizontally)) }
             OutputField(uri, t("Key URI", "URI de la clave"), minLines = 2)
             KeyValueTable(listOf(
@@ -421,11 +427,14 @@ fun KeycodeTool() {
 
 /* ======================= Slugify ======================= */
 
+private val MARKS = Regex("\\p{M}+")
+private val NON_SLUG = Regex("[^a-z0-9]+")
+
 fun slugify(s: String): String = Normalizer.normalize(s, Normalizer.Form.NFD)
-    .replace(Regex("\\p{M}+"), "")
+    .replace(MARKS, "")
     .replace("ß", "ss").replace("æ", "ae").replace("ø", "o").replace("đ", "d").replace("ł", "l")
     .lowercase(Locale.ROOT)
-    .replace(Regex("[^a-z0-9]+"), "-")
+    .replace(NON_SLUG, "-")
     .trim('-')
 
 @Composable
@@ -433,7 +442,7 @@ fun SlugifyTool() {
     var input by remember { mutableStateOf("") }
     ToolColumn {
         InputField(input, { input = it }, t("Your string to slugify", "Texto a convertir"), singleLine = false, minLines = 2)
-        OutputField(slugify(input), t("Your slug", "Tu slug"), minLines = 2)
+        OutputField(remember(input) { slugify(input) }, t("Your slug", "Tu slug"), minLines = 2)
     }
 }
 
@@ -447,14 +456,17 @@ class EditorBridge(val onHtml: (String) -> Unit) {
 @Composable
 fun WysiwygTool() {
     var html by remember { mutableStateOf("<h1>Hey!</h1><p>Welcome to this html editor</p>") }
-    val dark = MaterialTheme.colorScheme.background.let { (it.red + it.green + it.blue) / 3 < 0.5f }
+    val cs = MaterialTheme.colorScheme
+    val dark = cs.background.let { (it.red + it.green + it.blue) / 3 < 0.5f }
+    val bodyCss = if (dark) "background:${cs.surface.css()};color:${cs.onSurface.css()};" else ""
+    val barBg = cs.surfaceContainerHigh.css()
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
-    val page = remember(dark) {
+    val page = remember(bodyCss, barBg) {
         """
         <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
-          body{margin:0;font-family:sans-serif;${if (dark) "background:#232323;color:#e6e6e6;" else ""}}
-          #bar{position:sticky;top:0;display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:${if (dark) "#2e2e2e" else "#f3f5f7"}}
+          body{margin:0;font-family:sans-serif;$bodyCss}
+          #bar{position:sticky;top:0;display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:$barBg}
           #bar button{min-width:34px;height:32px;border:1px solid #8886;border-radius:6px;background:transparent;color:inherit;font-size:14px}
           #ed{min-height:260px;padding:10px;outline:none}
           blockquote{border-left:3px solid #18a058;margin:0;padding-left:10px}
@@ -495,12 +507,13 @@ fun WysiwygTool() {
                 modifier = Modifier.fillMaxWidth().height(340.dp)
             )
         }
-        OutputField(prettyHtml(html), t("HTML source", "Código HTML"), minLines = 6)
+        OutputField(remember(html) { prettyHtml(html) }, t("HTML source", "Código HTML"), minLines = 6)
     }
 }
 
-/** Salto de línea tras etiquetas de bloque para que el código sea legible. */
-fun prettyHtml(h: String) = h.replace(Regex("(</(p|h[1-6]|li|ul|ol|blockquote|pre|div)>|<hr>|<br>)"), "$1\n").trim()
+/** Line break after block tags so the source is readable. */
+private val BLOCK_END = Regex("(</(p|h[1-6]|li|ul|ol|blockquote|pre|div)>|<hr>|<br>)")
+fun prettyHtml(h: String) = h.replace(BLOCK_END, "$1\n").trim()
 
 /* ======================= User-agent parser ======================= */
 
@@ -532,8 +545,10 @@ fun UserAgentTool() {
 fun HttpStatusTool() {
     var q by remember { mutableStateOf("") }
     val es = isSpanish()
-    val filtered = HttpStatus.codes.filter {
-        q.isBlank() || it.code.toString().contains(q) || it.name.contains(q, true) || (if (es) it.es else it.en).contains(q, true)
+    val filtered = remember(q, es) {
+        HttpStatus.codes.filter {
+            q.isBlank() || it.code.toString().contains(q) || it.name.contains(q, true) || (if (es) it.es else it.en).contains(q, true)
+        }
     }
     ToolColumn {
         InputField(q, { q = it }, t("Search http status...", "Buscar código HTTP..."))

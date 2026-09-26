@@ -21,7 +21,7 @@ object Qr {
     }
 }
 
-/** Comparte un bitmap como PNG mediante FileProvider. */
+/** Shares a bitmap as PNG through FileProvider. */
 fun shareBitmap(ctx: Context, bmp: Bitmap, name: String) {
     val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
     val f = File(dir, "$name.png")
@@ -32,7 +32,7 @@ fun shareBitmap(ctx: Context, bmp: Bitmap, name: String) {
     }, null))
 }
 
-/** Guarda bytes en un Uri devuelto por CreateDocument. */
+/** Writes bytes to a Uri returned by CreateDocument. */
 fun writeUri(ctx: Context, uri: android.net.Uri, bytes: ByteArray) {
     ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
 }

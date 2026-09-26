@@ -10,6 +10,7 @@
     <string name="theme_system">Según el sistema</string>
     <string name="theme_light">Claro</string>
     <string name="theme_dark">Oscuro</string>
+    <string name="theme_dark_blue">Azul oscuro</string>
     <string name="language">Idioma</string>
     <string name="lang_system">Según el sistema</string>
     <string name="lang_en">English</string>
@@ -208,4 +209,21 @@
     <string name="tool_phone_parser_and_formatter_desc">Analiza, valida y formatea números de teléfono (país, tipo...).</string>
     <string name="tool_iban_validator_and_parser">Validador de IBAN</string>
     <string name="tool_iban_validator_and_parser_desc">Valida y analiza IBAN: país, BBAN, QR-IBAN y formato legible.</string>
+    <string name="theme_black">Negro (OLED)</string>
+    <string name="theme_green">Verde it-tools</string>
+    <string name="tile_favorites">Favoritas</string>
+    <string name="tile_all">Todas</string>
+    <string name="more_options">Más opciones</string>
+    <string name="list_empty">Todavía no hay herramientas aquí.</string>
+    <string name="backup">Copia de seguridad</string>
+    <string name="backup_help">Guarda tus ajustes (tema, idioma y herramientas favoritas) en un archivo JSON o restáuralos desde uno.</string>
+    <string name="backup_create">Crear copia</string>
+    <string name="backup_restore">Restaurar</string>
+    <string name="backup_saved">Copia guardada</string>
+    <string name="backup_restored">Ajustes restaurados</string>
+    <string name="backup_error">No se pudo guardar la copia</string>
+    <string name="backup_invalid">El archivo no es una copia válida de ITools</string>
+    <string name="license">Licencia</string>
+    <string name="license_text">ITools es software libre: puedes redistribuirlo y/o modificarlo según los términos de la Licencia Pública General de GNU versión 3 (GPL-3.0), publicada por la Free Software Foundation. Se distribuye SIN NINGUNA GARANTÍA; consulta la licencia para más detalles.</string>
+    <string name="license_link">GNU GPL v3.0</string>
 </resources>

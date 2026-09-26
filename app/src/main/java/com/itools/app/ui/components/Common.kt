@@ -18,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -30,35 +32,38 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itools.app.R
 
-/* ---------- Idioma ---------- */
+/* ---------- Language ---------- */
 
-/** Idioma activo, resuelto una sola vez en la raíz (ver [ProvideLanguage]) en lugar de en cada llamada a [t]. */
+/** Active language, resolved once at the root (see [ProvideLanguage]) instead of on every call to [t]. */
 private val LocalSpanish = staticCompositionLocalOf { false }
 
-/** Resuelve el idioma de los recursos activos (respeta el idioma elegido en la app) y lo expone a [isSpanish]. */
+/** Resolves the language of the active resources (honors the language chosen in the app) and exposes it to [isSpanish]. */
 @Composable
 fun ProvideLanguage(content: @Composable () -> Unit) =
     CompositionLocalProvider(LocalSpanish provides (stringResource(R.string.lang_code) == "es"), content = content)
 
-/** true si los recursos activos son los de español. */
+/** true if the active resources are the Spanish ones. */
 @Composable
 @ReadOnlyComposable
 fun isSpanish(): Boolean = LocalSpanish.current
 
-/** Texto bilingüe para etiquetas internas de las herramientas. */
+/** Bilingual text for the internal labels of the tools. */
 @Composable
 @ReadOnlyComposable
 fun t(en: String, es: String): String = if (LocalSpanish.current) es else en
 
+/** Color in CSS format (#rrggbb), for web views. */
+fun Color.css(): String = "#%06x".format(toArgb() and 0xffffff)
+
 val Mono = FontFamily.Monospace
 val MonoStyle @Composable get() = MaterialTheme.typography.bodyMedium.copy(fontFamily = Mono)
 
-/* ---------- Portapapeles ---------- */
+/* ---------- Clipboard ---------- */
 
 fun copyText(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText("ITools", text))
-    // Android 13+ ya muestra su propio aviso
+    // Android 13+ already shows its own notice
     if (android.os.Build.VERSION.SDK_INT < 33)
         Toast.makeText(context, context.getString(R.string.copied), Toast.LENGTH_SHORT).show()
 }
@@ -73,7 +78,7 @@ fun CopyButton(text: String, modifier: Modifier = Modifier) {
 
 /* ---------- Layout ---------- */
 
-/** Contenedor desplazable estándar para cada herramienta. */
+/** Standard scrollable container for each tool. */
 @Composable
 fun ToolColumn(scroll: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     val m = Modifier.fillMaxWidth().let { if (scroll) it.verticalScroll(rememberScrollState()) else it }
@@ -99,7 +104,7 @@ fun Panel(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
-/* ---------- Campos ---------- */
+/* ---------- Fields ---------- */
 
 @Composable
 fun InputField(
@@ -134,7 +139,7 @@ fun InputField(
     )
 }
 
-/** Campo de solo lectura con botón de copiar. */
+/** Read-only field with a copy button. */
 @Composable
 fun OutputField(
     value: String,
@@ -158,7 +163,7 @@ fun OutputField(
     )
 }
 
-/** Fila etiqueta / valor con copiar (resultados tipo tabla). */
+/** Label / value row with copy (table-like results). */
 @Composable
 fun KeyValue(label: String, value: String, copy: Boolean = true) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -192,7 +197,7 @@ fun ErrorText(text: String) =
 fun Hint(text: String) =
     Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
 
-/* ---------- Selectores ---------- */
+/* ---------- Selectors ---------- */
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -209,7 +214,7 @@ fun <T> ChipChoice(label: String?, options: List<Pair<T, String>>, selected: T, 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun <T> Dropdown(label: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+fun <T> Dropdown(label: String, options: List<Pair<T, String>>, selected: T, modifier: Modifier = Modifier, onSelect: (T) -> Unit) {
     var open by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }, modifier = modifier) {
         OutlinedTextField(

@@ -10,8 +10,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.itools.app.data.ThemeMode
 
-// Paleta inspirada en it-tools: verde #18a058 sobre grises fríos.
+// Palette inspired by it-tools: green #18a058 over cool grays.
 val Brand = Color(0xFF18A058)
 private val BrandDark = Color(0xFF36AD6A)
 
@@ -43,11 +44,62 @@ private val Dark = darkColorScheme(
     outline = Color(0xFF4A4A4A), outlineVariant = Color(0xFF383838),
     error = Color(0xFFE88080),
 )
+// Dark blue: navy backgrounds with a light blue accent.
+private val DarkBlue = darkColorScheme(
+    primary = Color(0xFF6CB4FF), onPrimary = Color(0xFF002A52),
+    primaryContainer = Color(0xFF123D6B), onPrimaryContainer = Color(0xFFD3E6FF),
+    secondary = Color(0xFF9DB8DB), onSecondary = Color(0xFF102238),
+    secondaryContainer = Color(0xFF22364F), onSecondaryContainer = Color(0xFFD6E3F5),
+    background = Color(0xFF0B1628), onBackground = Color(0xFFE3EAF5),
+    surface = Color(0xFF111E33), onSurface = Color(0xFFE3EAF5),
+    surfaceVariant = Color(0xFF1A2A44), onSurfaceVariant = Color(0xFF9FB0C8),
+    surfaceContainerLowest = Color(0xFF08111F), surfaceContainerLow = Color(0xFF0E1A2D),
+    surfaceContainer = Color(0xFF13223A), surfaceContainerHigh = Color(0xFF1A2B46),
+    surfaceContainerHighest = Color(0xFF223553),
+    outline = Color(0xFF3A4E6E), outlineVariant = Color(0xFF26385A),
+    error = Color(0xFFFF8A8A),
+)
 
+// Pure black for OLED screens (black pixels are turned off) with the it-tools green.
+private val Black = darkColorScheme(
+    primary = BrandDark, onPrimary = Color(0xFF00210F),
+    primaryContainer = Color(0xFF1D4A30), onPrimaryContainer = Color(0xFFBDEBD0),
+    secondary = Color(0xFF9CC7AE), onSecondary = Color(0xFF0E2A1B),
+    secondaryContainer = Color(0xFF1E2A23), onSecondaryContainer = Color(0xFFD7E8DD),
+    background = Color.Black, onBackground = Color(0xFFE6E6E6),
+    surface = Color.Black, onSurface = Color(0xFFE6E6E6),
+    surfaceVariant = Color(0xFF121212), onSurfaceVariant = Color(0xFFA0A0A0),
+    surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF050505),
+    surfaceContainer = Color(0xFF0A0A0A), surfaceContainerHigh = Color(0xFF141414),
+    surfaceContainerHighest = Color(0xFF1A1A1A),
+    outline = Color(0xFF3A3A3A), outlineVariant = Color(0xFF262626),
+    error = Color(0xFFE88080),
+)
+
+// it-tools green: very dark green backgrounds with the it-tools green accent.
+private val Green = darkColorScheme(
+    primary = BrandDark, onPrimary = Color(0xFF00210F),
+    primaryContainer = Color(0xFF1D4A30), onPrimaryContainer = Color(0xFFBDEBD0),
+    secondary = Color(0xFF9CC7AE), onSecondary = Color(0xFF0E2A1B),
+    secondaryContainer = Color(0xFF24402F), onSecondaryContainer = Color(0xFFD7E8DD),
+    background = Color(0xFF0E1A14), onBackground = Color(0xFFE2EDE6),
+    surface = Color(0xFF13231A), onSurface = Color(0xFFE2EDE6),
+    surfaceVariant = Color(0xFF1B3024), onSurfaceVariant = Color(0xFFA3BBAC),
+    surfaceContainerLowest = Color(0xFF09130E), surfaceContainerLow = Color(0xFF101E16),
+    surfaceContainer = Color(0xFF16291E), surfaceContainerHigh = Color(0xFF1C3326),
+    surfaceContainerHighest = Color(0xFF243D2F),
+    outline = Color(0xFF3C5A48), outlineVariant = Color(0xFF274234),
+    error = Color(0xFFE88080),
+)
+
+/** Custom palettes ([ThemeMode.hasOwnPalette]) take precedence over dynamic color. */
 @Composable
-fun IToolsTheme(dark: Boolean, dynamic: Boolean, content: @Composable () -> Unit) {
+fun IToolsTheme(mode: ThemeMode, dark: Boolean, dynamic: Boolean, content: @Composable () -> Unit) {
     val ctx = LocalContext.current
     val scheme = when {
+        mode == ThemeMode.DARK_BLUE -> DarkBlue
+        mode == ThemeMode.BLACK -> Black
+        mode == ThemeMode.GREEN -> Green
         dynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         dark -> Dark

@@ -8,3 +8,11 @@
 /captures
 .externalNativeBuild
 .cxx
+.kotlin/
+
+# Release signing data and build outputs
+keystore.properties
+*.jks
+*.apk
+*.aab
+/app/release/

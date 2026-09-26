@@ -11,13 +11,12 @@ import org.tomlj.Toml
 import org.xmlpull.v1.XmlPullParser
 import java.io.StringReader
 import java.math.BigDecimal
-import java.math.BigInteger
 
 /* ============================== JSON ============================== */
 
 class JsonException(msg: String) : Exception(msg)
 
-/** Parser JSON propio: conserva el orden de claves y da errores con posición. */
+/** Custom JSON parser: keeps key order and reports errors with their position. */
 object Json {
     fun parse(text: String): Any? {
         val p = P(text); p.ws()
@@ -112,12 +111,13 @@ object Json {
         else -> n.toString()
     }
 
-    /** indent = 0 → minificado. */
+    /** indent = 0 → minified. */
     fun stringify(v: Any?, indent: Int = 2, sortKeys: Boolean = false): String {
         val sb = StringBuilder()
+        val nl = if (indent > 0) "\n" else ""
+        val colon = if (indent > 0) ": " else ":"
+        fun pad(level: Int) { repeat(indent * level) { sb.append(' ') } }
         fun w(x: Any?, level: Int) {
-            val nl = if (indent > 0) "\n" else ""
-            val pad = " ".repeat(indent * (level + 1)); val end = " ".repeat(indent * level)
             when (x) {
                 null -> sb.append("null")
                 is String -> sb.append(quote(x))
@@ -128,23 +128,23 @@ object Json {
                     val entries = if (sortKeys) x.entries.sortedBy { it.key.toString() } else x.entries.toList()
                     sb.append("{").append(nl)
                     entries.forEachIndexed { idx, (k, vv) ->
-                        sb.append(pad).append(quote(k.toString())).append(if (indent > 0) ": " else ":")
+                        pad(level + 1); sb.append(quote(k.toString())).append(colon)
                         w(vv, level + 1)
                         if (idx < entries.lastIndex) sb.append(",")
                         sb.append(nl)
                     }
-                    sb.append(end).append("}")
+                    pad(level); sb.append("}")
                 }
                 is Iterable<*> -> {
                     val l = x.toList()
                     if (l.isEmpty()) { sb.append("[]"); return }
                     sb.append("[").append(nl)
                     l.forEachIndexed { idx, vv ->
-                        sb.append(pad); w(vv, level + 1)
+                        pad(level + 1); w(vv, level + 1)
                         if (idx < l.lastIndex) sb.append(",")
                         sb.append(nl)
                     }
-                    sb.append(end).append("]")
+                    pad(level); sb.append("]")
                 }
                 is Array<*> -> w(x.toList(), level)
                 else -> sb.append(quote(x.toString()))
@@ -171,7 +171,7 @@ object Yaml {
         return Dump(settings).dumpToString(normalize(v, sortKeys))
     }
 
-    /** Convierte BigDecimal a Double y ordena claves si se pide (snakeyaml no representa BigDecimal). */
+    /** Converts BigDecimal to Double and sorts keys if requested (snakeyaml cannot represent BigDecimal). */
     fun normalize(v: Any?, sortKeys: Boolean = false): Any? = when (v) {
         is Map<*, *> -> {
             val e = if (sortKeys) v.entries.sortedBy { it.key.toString() } else v.entries.toList()
@@ -215,7 +215,7 @@ object TomlFmt {
             m.entries.filter { it.value is Map<*, *> }.forEach { (k, v) ->
                 val p = path + key(k.toString())
                 val sub = v as Map<*, *>
-                // Solo emite cabecera si la tabla tiene valores simples o está vacía
+                // Only emit a header if the table has simple values or is empty
                 val hasSimple = sub.values.any { it != null && it !is Map<*, *> && !isTableArray(it) } || sub.isEmpty()
                 if (hasSimple) { if (sb.isNotEmpty()) sb.append('\n'); sb.append('[').append(p.joinToString(".")).append("]\n") }
                 table(sub, p)
@@ -237,7 +237,7 @@ object TomlFmt {
 /* ============================== XML ============================== */
 
 object XmlFmt {
-    /** XML → objeto compacto al estilo xml-js (_attributes, _text, _cdata, _comment). */
+    /** XML → compact object in xml-js style (_attributes, _text, _cdata, _comment). */
     fun toTree(xml: String): Map<String, Any?> {
         val p = Xml.newPullParser()
         p.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
@@ -276,13 +276,20 @@ object XmlFmt {
     private fun esc(s: String, attr: Boolean = false) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         .let { if (attr) it.replace("\"", "&quot;") else it }
 
-    /** Objeto compacto → XML indentado. */
+    /** Compact object → indented XML. */
     fun fromTree(v: Any?, indent: Int = 2): String {
         val sb = StringBuilder()
-        fun elem(name: String, value: Any?, level: Int) {
+        // A single local function: Kotlin does not allow mutual recursion between local functions
+        fun node(name: String, value: Any?, level: Int) {
             val pad = " ".repeat(indent * level)
+            when (name) {
+                "_text" -> { sb.append(pad).append(esc(value.toString())).append('\n'); return }
+                "_cdata" -> { sb.append("$pad<![CDATA[$value]]>\n"); return }
+                "_comment" -> { sb.append("$pad<!--$value-->\n"); return }
+                "_declaration" -> return
+            }
             when (value) {
-                is Iterable<*> -> value.forEach { elem(name, it, level) }
+                is Iterable<*> -> value.forEach { node(name, it, level) }
                 is Map<*, *> -> {
                     val attrs = (value["_attributes"] as? Map<*, *>)?.entries?.joinToString("") { " ${it.key}=\"${esc(it.value.toString(), true)}\"" } ?: ""
                     val children = value.entries.filter { it.key != "_attributes" }
@@ -297,29 +304,19 @@ object XmlFmt {
                 else -> sb.append("$pad<$name>${esc(value.toString())}</$name>\n")
             }
         }
-        fun node(k: String, c: Any?, level: Int) {
-            val pad = " ".repeat(indent * level)
-            when (k) {
-                "_text" -> sb.append(pad).append(esc(c.toString())).append('\n')
-                "_cdata" -> sb.append("$pad<![CDATA[$c]]>\n")
-                "_comment" -> sb.append("$pad<!--$c-->\n")
-                "_declaration" -> {}
-                else -> elem(k, c, level)
-            }
-        }
         require(v is Map<*, *>) { "Root must be an object" }
         v.forEach { (k, c) -> node(k.toString(), c, 0) }
         return sb.toString().trimEnd()
     }
 
-    /** Reindenta un XML conservando comentarios, CDATA e instrucciones de proceso. */
+    /** Re-indents XML, keeping comments, CDATA and processing instructions. */
     fun format(xml: String, indent: Int = 2, collapse: Boolean = true): String {
         val p = Xml.newPullParser()
         p.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
         p.setInput(StringReader(xml))
         val sb = StringBuilder()
         var level = 0
-        var openTagPending = false   // última etiqueta abierta aún sin hijos
+        var openTagPending = false   // last opened tag, still without children
         var pendingText: String? = null
         val decl = Regex("^\\s*<\\?xml[^>]*\\?>").find(xml)?.value?.trim()
         if (decl != null) sb.append(decl).append('\n')
@@ -391,5 +388,3 @@ object Csv {
         }.trimEnd()
     }
 }
-
-fun bigIntOrNull(s: String): BigInteger? = s.toBigIntegerOrNull()

@@ -1,12 +1,15 @@
 package com.itools.app.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,8 +17,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,27 +35,53 @@ import com.itools.app.tools.ToolMeta
 import kotlinx.coroutines.launch
 import java.text.Normalizer
 
-private fun norm(s: String) =
-    Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+/** Tool list keys: favorites, all, or the name of a [Category]. */
+const val LIST_FAVORITES = "favorites"
+const val LIST_ALL = "all"
+
+private val MARKS = Regex("\\p{M}+")
+private fun norm(s: String) = MARKS.replace(Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD), "")
+
+/** Localized texts of a tool and its pre-normalized search text. */
+private class ToolTexts(val name: String, val desc: String, val haystack: String)
+
+/** Localized names and normalized text, computed once per configuration (not on every keystroke). */
+@Composable
+private fun rememberToolTexts(): Map<String, ToolTexts> {
+    val res = LocalContext.current.resources
+    val config = LocalConfiguration.current
+    return remember(config) {
+        ToolCatalog.entries.associate { m ->
+            val name = res.getString(m.name)
+            val desc = res.getString(m.description)
+            m.id to ToolTexts(name, desc, listOf(name, m.englishName, m.id, desc).joinToString("\n") { norm(it) })
+        }
+    }
+}
+
+/* ======================= Home: tiles ======================= */
+
+private class NavTile(val key: String, val title: String, val icon: ImageVector, val tint: Color)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(store: SettingsStore, onOpenTool: (String) -> Unit, onOpenSettings: () -> Unit) {
+fun HomeScreen(store: SettingsStore, onOpenTool: (String) -> Unit, onOpenList: (String) -> Unit, onOpenSettings: () -> Unit) {
     val favs by store.favorites.collectAsStateWithLifecycle(emptySet())
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
-    var category by rememberSaveable { mutableStateOf<String?>(null) }
+    val texts = rememberToolTexts()
 
-    // Nombres localizados resueltos una vez para buscar en ambos idiomas
-    val names = ToolCatalog.entries.associate { it.id to stringResource(it.name) }
-    val descs = ToolCatalog.entries.associate { it.id to stringResource(it.description) }
-
-    val filtered = remember(query, category, names) {
+    val results = remember(query, texts) {
         val q = norm(query.trim())
-        ToolCatalog.entries.filter { m ->
-            (category == null || m.category.name == category) &&
-                (q.isEmpty() || listOf(names[m.id]!!, m.englishName, m.id, descs[m.id]!!).any { norm(it).contains(q) })
-        }
+        if (q.isEmpty()) emptyList() else ToolCatalog.entries.filter { q in texts.getValue(it.id).haystack }
+    }
+
+    // Favorites (if any) first, then "All" and one per category
+    val primary = MaterialTheme.colorScheme.primary
+    val tiles = buildList {
+        if (ToolCatalog.entries.any { it.id in favs }) add(NavTile(LIST_FAVORITES, stringResource(R.string.tile_favorites), Icons.Outlined.Star, primary))
+        add(NavTile(LIST_ALL, stringResource(R.string.tile_all), Icons.Outlined.Apps, primary))
+        Category.entries.forEach { add(NavTile(it.name, stringResource(it.label), it.icon, it.tint)) }
     }
 
     Scaffold(
@@ -63,51 +97,38 @@ fun HomeScreen(store: SettingsStore, onOpenTool: (String) -> Unit, onOpenSetting
                         )
                     }
                 },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Outlined.Settings, stringResource(R.string.settings))
-                    }
-                },
+                actions = { OverflowMenu(onOpenSettings) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { pad ->
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 300.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pad.calculateTopPadding(), bottom = pad.calculateBottomPadding() + 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize().imePadding()
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it },
-                    placeholder = { Text(stringResource(R.string.search_hint)) },
-                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, null) }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                LazyRowChips(category) { category = it }
-            }
-            val favTools = ToolCatalog.entries.filter { it.id in favs && it in filtered }
-            if (favTools.isNotEmpty() && query.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle(stringResource(R.string.favorites)) }
-                items(favTools, key = { "fav-" + it.id }) { m ->
-                    ToolCard(m, names[m.id]!!, descs[m.id]!!, true, { onOpenTool(m.id) }) {
-                        scope.launch { store.toggleFavorite(m.id) }
-                    }
+        // The search field lives outside the grids so it is not recreated (and does not lose focus) when switching from tiles to results
+        Column(Modifier.padding(top = pad.calculateTopPadding()).fillMaxSize().imePadding()) {
+            OutlinedTextField(
+                value = query, onValueChange = { query = it },
+                placeholder = { Text(stringResource(R.string.search_hint)) },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, null) }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp)
+            )
+            val bottom = PaddingValues(bottom = pad.calculateBottomPadding())
+            if (query.isBlank()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 104.dp),
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = pad.calculateBottomPadding() + 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(tiles, key = { it.key }) { tile -> HomeTile(tile.title, tile.icon, tile.tint) { onOpenList(tile.key) } }
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle(stringResource(R.string.all_tools)) }
-            }
-            if (filtered.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+            } else {
+                ToolCardGrid(results, texts, favs, bottom, onOpenTool, { id -> scope.launch { store.toggleFavorite(id) } }) {
                     Text(
                         stringResource(R.string.no_results, query),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -115,34 +136,108 @@ fun HomeScreen(store: SettingsStore, onOpenTool: (String) -> Unit, onOpenSetting
                     )
                 }
             }
-            items(filtered, key = { it.id }) { m ->
-                ToolCard(m, names[m.id]!!, descs[m.id]!!, m.id in favs, { onOpenTool(m.id) }) {
-                    scope.launch { store.toggleFavorite(m.id) }
-                }
-            }
         }
     }
 }
 
+/** Square navigation tile (icon + title), styled like the menus of the other apps. */
 @Composable
-private fun SectionTitle(text: String) =
-    Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
-
-@Composable
-private fun LazyRowChips(selected: String?, onSelect: (String?) -> Unit) {
-    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        item {
-            FilterChip(selected = selected == null, onClick = { onSelect(null) },
-                label = { Text(stringResource(R.string.all_tools)) })
+private fun HomeTile(title: String, icon: ImageVector, tint: Color, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = Modifier.aspectRatio(1f)) {
+        Column(
+            Modifier.fillMaxSize().padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.height(6.dp))
+            Text(title, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        items(Category.entries.size) { i ->
-            val c = Category.entries[i]
-            FilterChip(
-                selected = selected == c.name,
-                onClick = { onSelect(if (selected == c.name) null else c.name) },
-                leadingIcon = { Icon(c.icon, null, Modifier.size(18.dp), tint = c.tint) },
-                label = { Text(stringResource(c.label)) }
+    }
+}
+
+/** Three-dot overflow menu of the top bar. */
+@Composable
+private fun OverflowMenu(onOpenSettings: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, stringResource(R.string.more_options)) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.settings)) },
+                leadingIcon = { Icon(Icons.Outlined.Settings, null) },
+                onClick = { open = false; onOpenSettings() }
             )
+        }
+    }
+}
+
+/* ======================= Subtiles: tool list ======================= */
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ToolListScreen(key: String, store: SettingsStore, onOpenTool: (String) -> Unit, onOpenSettings: () -> Unit, onBack: () -> Unit) {
+    val favs by store.favorites.collectAsStateWithLifecycle(emptySet())
+    val scope = rememberCoroutineScope()
+    val texts = rememberToolTexts()
+    val category = Category.entries.firstOrNull { it.name == key }
+    val title = when {
+        key == LIST_FAVORITES -> stringResource(R.string.favorites)
+        category != null -> stringResource(category.label)
+        else -> stringResource(R.string.all_tools)
+    }
+    val tools = remember(key, favs) {
+        when {
+            key == LIST_FAVORITES -> ToolCatalog.entries.filter { it.id in favs }
+            category != null -> ToolCatalog.entries.filter { it.category == category }
+            else -> ToolCatalog.entries
+        }
+    }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+                },
+                actions = { OverflowMenu(onOpenSettings) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { pad ->
+        ToolCardGrid(tools, texts, favs, pad, onOpenTool, { id -> scope.launch { store.toggleFavorite(id) } }) {
+            Text(
+                stringResource(R.string.list_empty),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 32.dp)
+            )
+        }
+    }
+}
+
+/** Grid of tool cards with description and favorite button. */
+@Composable
+private fun ToolCardGrid(
+    tools: List<ToolMeta>,
+    texts: Map<String, ToolTexts>,
+    favs: Set<String>,
+    pad: PaddingValues,
+    onOpenTool: (String) -> Unit,
+    onToggleFav: (String) -> Unit,
+    empty: @Composable () -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 300.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pad.calculateTopPadding(), bottom = pad.calculateBottomPadding() + 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (tools.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { empty() }
+        items(tools, key = { it.id }) { m ->
+            val tx = texts.getValue(m.id)
+            ToolCard(m, tx.name, tx.desc, m.id in favs, { onOpenTool(m.id) }) { onToggleFav(m.id) }
         }
     }
 }
@@ -158,11 +253,9 @@ private fun ToolCard(m: ToolMeta, name: String, desc: String, fav: Boolean, onCl
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape)
-                        .then(Modifier),
+                    Modifier.size(36.dp).background(m.category.tint.copy(alpha = 0.14f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Surface(color = m.category.tint.copy(alpha = 0.14f), shape = CircleShape, modifier = Modifier.fillMaxSize()) {}
                     Icon(m.icon, null, tint = m.category.tint, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(10.dp))

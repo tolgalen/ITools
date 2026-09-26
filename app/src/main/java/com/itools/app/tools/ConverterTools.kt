@@ -35,10 +35,9 @@ import java.math.BigInteger
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import java.util.Base64
 import java.util.Locale
 
-/* ======================= Genérico: convertidor texto → texto ======================= */
+/* ======================= Generic: text → text converter ======================= */
 
 @Composable
 fun FormatConverter(
@@ -72,24 +71,29 @@ private const val SAMPLE_XML = "<a x=\"1.234\" y=\"It's\"><b>hello</b><c>world</
 
 object Dates {
     val excelEpoch: LocalDateTime = LocalDateTime.of(1899, 12, 30, 0, 0)
+    private val MONGO_ID = Regex("^[0-9a-fA-F]{24}$")
+    private val INTEGER = Regex("^-?\\d+$")
+    private val DECIMAL = Regex("^\\d+\\.\\d+$")
+    private val ISO_9075 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    private val ISO_9075_SHORT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     fun parse(s: String, zone: ZoneId): Pair<Instant, String>? {
         val t = s.trim()
         if (t.isEmpty()) return null
-        if (t.matches(Regex("^[0-9a-fA-F]{24}$")) && !t.all { it.isDigit() })
+        if (MONGO_ID.matches(t) && !t.all { it.isDigit() })
             return Instant.ofEpochSecond(t.substring(0, 8).toLong(16)) to "Mongo ObjectID"
-        if (t.matches(Regex("^-?\\d+$"))) {
+        if (INTEGER.matches(t)) {
             val n = t.toLong()
             return if (t.trimStart('-').length >= 12) Instant.ofEpochMilli(n) to "Timestamp (ms)" else Instant.ofEpochSecond(n) to "Unix timestamp"
         }
-        if (t.matches(Regex("^\\d+\\.\\d+$")))
+        if (DECIMAL.matches(t))
             return excelEpoch.plusNanos((t.toDouble() * 86400e9).toLong()).atZone(zone).toInstant() to "Excel"
         val tries: List<Pair<String, () -> Instant>> = listOf(
             "ISO 8601" to { OffsetDateTime.parse(t).toInstant() },
             "ISO 8601" to { ZonedDateTime.parse(t).toInstant() },
             "ISO 8601" to { Instant.parse(t) },
             "ISO 8601" to { LocalDateTime.parse(t).atZone(zone).toInstant() },
-            "ISO 9075" to { LocalDateTime.parse(t, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")).atZone(zone).toInstant() },
-            "ISO 9075" to { LocalDateTime.parse(t, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")).atZone(zone).toInstant() },
+            "ISO 9075" to { LocalDateTime.parse(t, ISO_9075).atZone(zone).toInstant() },
+            "ISO 9075" to { LocalDateTime.parse(t, ISO_9075_SHORT).atZone(zone).toInstant() },
             "ISO date" to { LocalDate.parse(t).atStartOfDay(zone).toInstant() },
             "RFC 7231" to { ZonedDateTime.parse(t, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant() },
             "RFC 3339" to { OffsetDateTime.parse(t.replace(' ', 'T')).toInstant() },
@@ -104,7 +108,7 @@ object Dates {
         return listOf(
             "Locale" to z.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.FULL, FormatStyle.MEDIUM).withLocale(locale)),
             "ISO 8601" to z.toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
-            "ISO 9075" to z.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+            "ISO 9075" to z.format(ISO_9075),
             "RFC 3339" to z.toOffsetDateTime().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
             "RFC 7231" to i.atZone(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME),
             "Unix timestamp" to i.epochSecond.toString(),
@@ -190,6 +194,7 @@ fun BaseConverterTool() {
 object Roman {
     private val table = listOf(1000 to "M", 900 to "CM", 500 to "D", 400 to "CD", 100 to "C", 90 to "XC",
         50 to "L", 40 to "XL", 10 to "X", 9 to "IX", 5 to "V", 4 to "IV", 1 to "I")
+    private val VALID = Regex("^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$")
     fun toRoman(n: Int): String {
         require(n in 1..3999)
         var x = n; val sb = StringBuilder()
@@ -198,7 +203,7 @@ object Roman {
     }
     fun fromRoman(s: String): Int {
         val up = s.trim().uppercase()
-        require(up.matches(Regex("^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$")) && up.isNotEmpty())
+        require(up.isNotEmpty() && VALID.matches(up))
         var i = 0; var r = 0
         for ((v, sym) in table) while (up.startsWith(sym, i)) { r += v; i += sym.length }
         return r
@@ -297,6 +302,7 @@ fun Base64FileTool() {
 fun ColorConverterTool() {
     var input by remember { mutableStateOf("#1ea54c") }
     val color = remember(input) { ColorConv.parse(input) }
+    val formats = remember(color) { color?.let { ColorConv.formats(it) } }
     ToolColumn {
         InputField(input, { input = it }, t("Any CSS color (hex, rgb, hsl, hwb, lch, cmyk, name)", "Cualquier color CSS (hex, rgb, hsl, hwb, lch, cmyk, nombre)"),
             mono = true, error = if (color == null) t("Invalid color", "Color no válido") else null)
@@ -312,7 +318,7 @@ fun ColorConverterTool() {
                     input = ColorConv.formats(n)[1].second
                 }
             }
-            KeyValueTable(ColorConv.formats(c))
+            formats?.let { KeyValueTable(it) }
         }
     }
 }
@@ -320,10 +326,13 @@ fun ColorConverterTool() {
 /* ======================= Case converter ======================= */
 
 object Case {
+    private val LOWER_UPPER = Regex("([\\p{Ll}\\d])(\\p{Lu})")
+    private val UPPER_WORD = Regex("(\\p{Lu})(\\p{Lu}\\p{Ll})")
+    private val SEPARATORS = Regex("[^\\p{L}\\d]+")
     fun words(s: String): List<String> = s
-        .replace(Regex("([\\p{Ll}\\d])(\\p{Lu})"), "$1 $2")
-        .replace(Regex("(\\p{Lu})(\\p{Lu}\\p{Ll})"), "$1 $2")
-        .split(Regex("[^\\p{L}\\d]+")).filter { it.isNotEmpty() }
+        .replace(LOWER_UPPER, "$1 $2")
+        .replace(UPPER_WORD, "$1 $2")
+        .split(SEPARATORS).filter { it.isNotEmpty() }
     private fun cap(w: String) = w.lowercase().replaceFirstChar { it.uppercase() }
     fun all(s: String): List<Pair<String, String>> {
         val w = words(s)
@@ -341,7 +350,7 @@ object Case {
             "Pathcase" to w.joinToString("/") { it.lowercase() },
             "Sentencecase" to w.mapIndexed { i, x -> if (i == 0) cap(x) else x.lowercase() }.joinToString(" "),
             "Snakecase" to w.joinToString("_") { it.lowercase() },
-            "Mockingcase" to s.mapIndexed { i, c -> if (i % 2 == 0) c.lowercaseChar() else c.uppercaseChar() }.joinToString(""),
+            "Mockingcase" to String(CharArray(s.length) { i -> if (i % 2 == 0) s[i].lowercaseChar() else s[i].uppercaseChar() }),
         )
     }
 }
@@ -351,7 +360,8 @@ fun CaseConverterTool() {
     var input by remember { mutableStateOf("lorem ipsum dolor sit amet") }
     ToolColumn {
         InputField(input, { input = it }, t("Your string", "Tu texto"))
-        Case.all(input).forEach { (k, v) -> OutputField(v, k, singleLine = true) }
+        val cases = remember(input) { Case.all(input) }
+        cases.forEach { (k, v) -> OutputField(v, k, singleLine = true) }
     }
 }
 
@@ -378,14 +388,18 @@ fun NatoTool() {
 
 /* ======================= Text ↔ binary / unicode ======================= */
 
+private val NON_BINARY = Regex("[^01]")
+private val UNICODE_ENTITY = Regex("&#(x?)([0-9a-fA-F]+);")
+private val SPACE_BETWEEN_ENTITIES = Regex("(?<=;) (?=&#)")
+
 @Composable
 fun TextToBinaryTool() {
     var text by remember { mutableStateOf("") }
     var bin by remember { mutableStateOf("") }
-    val toBin = text.map { it.code.toString(2).padStart(8, '0') }.joinToString(" ")
+    val toBin = remember(text) { text.map { it.code.toString(2).padStart(8, '0') }.joinToString(" ") }
     val toText = remember(bin) {
         runCatching {
-            bin.replace(Regex("[^01]"), "").chunked(8).filter { it.length == 8 }.map { it.toInt(2).toChar() }.joinToString("")
+            bin.replace(NON_BINARY, "").chunked(8).filter { it.length == 8 }.map { it.toInt(2).toChar() }.joinToString("")
         }
     }
     ToolColumn {
@@ -404,11 +418,13 @@ fun TextToBinaryTool() {
 fun TextToUnicodeTool() {
     var text by remember { mutableStateOf("") }
     var uni by remember { mutableStateOf("") }
-    val toUni = text.codePoints().toArray().joinToString(" ") { "&#$it;" }
-    val toText = Regex("&#(x?)([0-9a-fA-F]+);").replace(uni) { m ->
-        val cp = m.groupValues[2].toIntOrNull(if (m.groupValues[1] == "x") 16 else 10) ?: return@replace m.value
-        String(Character.toChars(cp))
-    }.replace(Regex("(?<=;) (?=&#)"), "")
+    val toUni = remember(text) { text.codePoints().toArray().joinToString(" ") { "&#$it;" } }
+    val toText = remember(uni) {
+        UNICODE_ENTITY.replace(uni) { m ->
+            val cp = m.groupValues[2].toIntOrNull(if (m.groupValues[1] == "x") 16 else 10) ?: return@replace m.value
+            String(Character.toChars(cp))
+        }.replace(SPACE_BETWEEN_ENTITIES, "")
+    }
     ToolColumn {
         Panel(t("Text to Unicode", "Texto a Unicode")) {
             InputField(text, { text = it }, t("Enter text to convert to unicode", "Texto a convertir"), singleLine = false, minLines = 2)
@@ -480,9 +496,10 @@ fun MarkdownToHtmlTool() {
     val renderer = remember { HtmlRenderer.builder().extensions(ext).build() }
     val html = remember(md) { renderer.render(parser.parse(md)) }
     var web by remember { mutableStateOf<WebView?>(null) }
-    val dark = MaterialTheme.colorScheme.background.let { (it.red + it.green + it.blue) / 3 < 0.5f }
+    val cs = MaterialTheme.colorScheme
+    val dark = cs.background.let { (it.red + it.green + it.blue) / 3 < 0.5f }
     val page = "<html><head><meta name='viewport' content='width=device-width'><style>body{font-family:sans-serif;padding:8px;" +
-        (if (dark) "background:#232323;color:#e6e6e6;" else "") +
+        (if (dark) "background:${cs.surface.css()};color:${cs.onSurface.css()};" else "") +
         "}table{border-collapse:collapse}td,th{border:1px solid #888;padding:4px 8px}pre{background:#8882;padding:8px;overflow:auto}</style></head><body>$html</body></html>"
     ToolColumn {
         InputField(md, { md = it }, t("Your Markdown content", "Tu contenido Markdown"), singleLine = false, minLines = 8, mono = true)
@@ -502,6 +519,3 @@ fun MarkdownToHtmlTool() {
         }) { Text(t("Print as PDF", "Imprimir como PDF")) }
     }
 }
-
-@Suppress("unused")
-private fun b64(s: String) = Base64.getEncoder().encodeToString(s.toByteArray())

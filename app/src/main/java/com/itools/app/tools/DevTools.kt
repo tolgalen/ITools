@@ -101,6 +101,8 @@ object Cron {
         "@weekly" to "0 0 * * 0", "@daily" to "0 0 * * *", "@midnight" to "0 0 * * *", "@hourly" to "0 * * * *",
     )
 
+    private val WS = Regex("\\s+")
+
     private class F(val min: Int, val max: Int, val names: List<String>? = null, val nameBase: Int = 0)
     private val FIELDS = listOf(F(0, 59), F(0, 23), F(1, 31), F(1, 12, MONTHS, 1), F(0, 7, DAYS, 0))
 
@@ -111,12 +113,12 @@ object Cron {
         return n
     }
 
-    /** Valida y normaliza nombres (JAN, MON...) a números. */
+    /** Validates and normalizes names (JAN, MON...) to numbers. */
     fun normalize(expr: String): List<String> {
         val e = ALIASES[expr.trim().lowercase()] ?: expr.trim()
-        val parts = e.split(Regex("\\s+"))
+        val parts = e.split(WS)
         if (parts.size !in 5..6) throw IllegalArgumentException("Expected 5 fields")
-        val p = if (parts.size == 6) parts.drop(1) else parts   // admite campo de segundos
+        val p = if (parts.size == 6) parts.drop(1) else parts   // accepts a seconds field
         return p.mapIndexed { i, field ->
             val f = FIELDS[i]
             field.split(",").joinToString(",") { item ->
@@ -281,7 +283,7 @@ object SqlFormatter {
                 }
                 else -> {
                     val two = if (i + 1 < sql.length) sql.substring(i, i + 2) else ""
-                    if (two in setOf("<=", ">=", "<>", "!=", "||", "::", "->")) { out += Tok.Sym(two); i += 2 } else { out += Tok.Sym(c.toString()); i++ }
+                    if (two in TWO_CHAR_SYMS) { out += Tok.Sym(two); i += 2 } else { out += Tok.Sym(c.toString()); i++ }
                 }
             }
         }
@@ -291,13 +293,20 @@ object SqlFormatter {
     enum class KwCase { UPPER, LOWER, PRESERVE }
 
     private val JOINS = NEWLINE_KW.filter { it.endsWith("JOIN") }.toSet()
+    private val NEWLINE_KW_WORDS = NEWLINE_KW.map { it to it.split(" ") }
+    private val TWO_CHAR_SYMS = setOf("<=", ">=", "<>", "!=", "||", "::", "->")
+    private val LIST_CLAUSES = setOf("SELECT", "GROUP BY", "ORDER BY", "SET", "WITH", "VALUES")
+    private val CONDITION_CLAUSES = setOf("WHERE", "HAVING")
+    private val SUBQUERY_START = setOf("SELECT", "WITH")
+    private val SPACE_BEFORE_PAREN = setOf("IN", "VALUES", "AS", "ON", "AND", "OR", "NOT", "EXISTS")
+    private val MULTI_BLANK = Regex("\n{3,}")
 
     fun format(sql: String, indentSize: Int = 2, kwCase: KwCase = KwCase.UPPER): String {
         val toks = tokenize(sql)
         val sb = StringBuilder()
         val ind = " ".repeat(indentSize)
         var level = 0
-        val parenStack = ArrayDeque<Boolean>() // true si el paréntesis abre una subconsulta
+        val parenStack = ArrayDeque<Boolean>() // true if the parenthesis opens a subquery
         var needSpace = false
         var clause = ""
         fun kw(s: String) = when (kwCase) { KwCase.UPPER -> s.uppercase(); KwCase.LOWER -> s.lowercase(); KwCase.PRESERVE -> s }
@@ -311,19 +320,19 @@ object SqlFormatter {
         while (i < toks.size) {
             val tk = toks[i]
             if (tk is Tok.Word) {
-                val nl = NEWLINE_KW.firstOrNull { k ->
-                    val ws = k.split(" ")
+                val match = NEWLINE_KW_WORDS.firstOrNull { (_, ws) ->
                     ws.indices.all { j -> (toks.getOrNull(i + j) as? Tok.Word)?.text?.equals(ws[j], true) == true }
                 }
-                if (nl != null) {
-                    val n = nl.split(" ").size
+                if (match != null) {
+                    val (nl, words) = match
+                    val n = words.size
                     val original = (0 until n).joinToString(" ") { toks[i + it].text }
                     if (nl in JOINS) { newline(1); emit(kw(original)) }
                     else { newline(); emit(kw(original)); clause = nl; newline(1) }
                     i += n; continue
                 }
                 val up = tk.text.uppercase()
-                if ((up == "AND" || up == "OR") && clause in setOf("WHERE", "HAVING")) { newline(1); emit(kw(tk.text)); i++; continue }
+                if ((up == "AND" || up == "OR") && clause in CONDITION_CLAUSES) { newline(1); emit(kw(tk.text)); i++; continue }
                 emit(if (up in KEYWORDS) kw(tk.text) else tk.text); i++; continue
             }
             when (tk) {
@@ -331,16 +340,16 @@ object SqlFormatter {
                 is Tok.Sym -> when (tk.text) {
                     "," -> {
                         sb.append(',')
-                        if (parenStack.lastOrNull() != false && clause in setOf("SELECT", "GROUP BY", "ORDER BY", "SET", "WITH", "VALUES")) newline(1)
+                        if (parenStack.lastOrNull() != false && clause in LIST_CLAUSES) newline(1)
                         else needSpace = true
                     }
                     ";" -> { sb.append(";\n"); level = 0; clause = ""; parenStack.clear(); needSpace = false }
                     "(" -> {
-                        val sub = (toks.getOrNull(i + 1) as? Tok.Word)?.text?.uppercase() in setOf("SELECT", "WITH")
+                        val sub = (toks.getOrNull(i + 1) as? Tok.Word)?.text?.uppercase() in SUBQUERY_START
                         val prevWord = sb.isNotEmpty() && (sb.last().isLetterOrDigit() || sb.last() == '_')
                         val prevTok = toks.getOrNull(i - 1)
-                        // función: sin espacio (COUNT(x)); en otro caso con espacio
-                        if (needSpace && !(prevWord && prevTok is Tok.Word && prevTok.text.uppercase() !in setOf("IN", "VALUES", "AS", "ON", "AND", "OR", "NOT", "EXISTS"))) sb.append(' ')
+                        // function: no space (COUNT(x)); otherwise with a space
+                        if (needSpace && !(prevWord && prevTok is Tok.Word && prevTok.text.uppercase() !in SPACE_BEFORE_PAREN)) sb.append(' ')
                         sb.append('('); needSpace = false
                         parenStack.addLast(sub)
                         if (sub) level += 2
@@ -361,7 +370,7 @@ object SqlFormatter {
             }
             i++
         }
-        return sb.lines().joinToString("\n") { it.trimEnd() }.replace(Regex("\n{3,}"), "\n\n").trim()
+        return sb.lines().joinToString("\n") { it.trimEnd() }.replace(MULTI_BLANK, "\n\n").trim()
     }
 }
 
@@ -417,7 +426,7 @@ fun ChmodTool() {
 /* ======================= Docker run → compose ======================= */
 
 object DockerCompose {
-    /** Divide una línea de shell respetando comillas y continuaciones con "\". */
+    /** Splits a shell line honoring quotes and "\" line continuations. */
     fun shellSplit(s: String): List<String> {
         val src = s.replace(Regex("\\\\\\r?\\n"), " ")
         val out = mutableListOf<String>(); val cur = StringBuilder(); var q: Char? = null; var has = false; var i = 0
@@ -438,6 +447,8 @@ object DockerCompose {
 
     private val NO_VALUE = setOf("-d", "--detach", "--rm", "-i", "--interactive", "-t", "--tty", "-it", "-ti", "--privileged", "--init", "--read-only", "-P", "--publish-all")
 
+    private val YAML_RESERVED = setOf("true", "false", "yes", "no", "on", "off", "null", "~")
+
     data class Result(val yaml: String, val warnings: List<String>)
 
     fun convert(cmd: String): Result {
@@ -456,7 +467,7 @@ object DockerCompose {
             val a = args[i]
             if (!a.startsWith("-")) { image = a; i++; break }
             var (flag, inline) = if (a.startsWith("--") && a.contains("=")) a.substringBefore("=") to a.substringAfter("=") else a to null
-            // flags cortos combinados con valor: -p8080:80
+            // short flags combined with their value: -p8080:80
             if (!a.startsWith("--") && a.length > 2 && a !in NO_VALUE && inline == null && a[1] in "pvewuhlm") { flag = a.substring(0, 2); inline = a.substring(2) }
             if (flag in NO_VALUE) {
                 when (flag) {
@@ -523,7 +534,7 @@ object DockerCompose {
             .replace(Regex("[^a-zA-Z0-9_-]"), "-").ifEmpty { "app" }
 
         fun q(s: String): String = if (s.isEmpty() || s.any { it in ":{}[],&*#?|<>=!%@`'\"\\" } || s.first().isWhitespace() || s.last().isWhitespace() ||
-            s.lowercase() in setOf("true", "false", "yes", "no", "on", "off", "null", "~") || s.toDoubleOrNull() != null) Json.quote(s) else s
+            s.lowercase() in YAML_RESERVED || s.toDoubleOrNull() != null) Json.quote(s) else s
 
         val sb = StringBuilder("services:\n  ${q(name)}:\n    image: ${q(image)}\n")
         svc.forEach { (k, v) -> sb.append("    $k: ${if (v is Boolean) v.toString() else q(v.toString())}\n") }
