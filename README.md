@@ -2,6 +2,9 @@
 
 Native Android app (Kotlin + Jetpack Compose + Material 3) that brings the 86 utilities of [it-tools.tech](https://it-tools.tech/) to your phone, plus a password generator, an IPv6 subnet calculator a two-way docker run ⇄ Compose converter and a Spanish DNI / NIE validator (**90 tools**), grouped in the same categories: Crypto, Converter, Web, Images and videos, Development, Network, Math, Measurement, Text and Data.
 
+<img width="461" height="972" alt="image" src="https://github.com/user-attachments/assets/29ff7572-c5d1-41cf-a699-4defdc54abaf" />
+
+
 - **Android 10+** (minSdk 29, targetSdk 35)
 - **Themes**: system default, light, dark, dark blue, black (OLED) and it-tools green; optional dynamic color (Material You) on Android 12+
 - **Multilingual**: English and Spanish, selectable inside the app (per-app language; on Android 13+ also from the system settings)
